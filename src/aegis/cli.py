@@ -1,5 +1,5 @@
 import logging
-from typing import Optional
+
 import typer
 from rich.console import Console
 
@@ -26,7 +26,7 @@ def version_callback(value: bool) -> None:
 
 @app.callback()
 def main(
-    version_opt: Optional[bool] = typer.Option(
+    version_opt: bool | None = typer.Option(  # noqa: ARG001
         None,
         "--version",
         "-v",
@@ -50,6 +50,4 @@ def main(
 @app.command()
 def version() -> None:
     """Show the version of Aegis."""
-    console.print(
-        f"[bold blue]Aegis[/bold blue] version: [green]{__version__}[/green]"
-    )
+    console.print(f"[bold blue]Aegis[/bold blue] version: [green]{__version__}[/green]")

@@ -1,6 +1,6 @@
 import tomllib
 from pathlib import Path
-from typing import Optional
+
 from pydantic import BaseModel, Field
 
 
@@ -31,7 +31,7 @@ class AegisConfig(BaseModel):
     )
 
 
-def load_config(config_path: Optional[Path] = None) -> AegisConfig:
+def load_config(config_path: Path | None = None) -> AegisConfig:
     """Loads and validates configuration from a TOML file.
 
     If file doesn't exist or is not specified, returns default configuration.
