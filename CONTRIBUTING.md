@@ -1,36 +1,66 @@
 # Contributing to Aegis
 
-Thank you for your interest in contributing to Aegis! We want to make contributing to this project as easy and transparent as possible.
+Thank you for your interest in contributing to Aegis! This document outlines the guidelines, workflows, and standards to keep in mind when contributing.
 
-## Code of Conduct
+## Development Workflow
 
-By participating in this project, you agree to abide by the [Code of Conduct](CODE_OF_CONDUCT.md).
+### Setup Instructions
 
-## Development Setup
+Aegis is developed using Python 3.11+. We recommend using [uv](https://github.com/astral-sh/uv) or a standard Python virtual environment.
 
-We use `uv` for python package and dependency management.
-
-1. **Clone the repository**:
+1. **Fork and Clone**:
    ```bash
-   git clone https://github.com/aryanp160/aegis.git
+   git clone https://github.com/your-username/aegis.git
    cd aegis
    ```
 
-2. **Set up the virtual environment and install dependencies**:
+2. **Establish Environment & Install Dependencies**:
+   * **Using `uv` (recommended)**:
+     ```bash
+     uv sync --all-groups
+     ```
+   * **Using standard `venv`**:
+     ```bash
+     python -m venv .venv
+     # Windows
+     .venv\Scripts\activate
+     # macOS / Linux
+     source .venv/bin/activate
+
+     python -m pip install --upgrade pip
+     pip install -e .[dev,test]
+     ```
+
+3. **Install Pre-Commit Hooks**:
    ```bash
-   uv sync --all-groups
+   pre-commit install
    ```
 
-3. **Install pre-commit hooks**:
-   ```bash
-   uv run pre-commit install
-   ```
+### Development Loop
 
-## Commit Message Guidelines
+When writing code or adding features:
+1. Run local tests: `pytest`
+2. Validate types: `mypy src tests`
+3. Check code formatting: `ruff check` and `ruff format`
 
-We follow the [Conventional Commits](https://www.conventionalcommits.org/) specification for commit messages. This allows us to automate changelogs and semantic versioning.
+---
 
-Commit messages should follow the structure:
+## Branch Naming Conventions
+
+Always create feature/bugfix branches off the `develop` branch. Use descriptive names prefixed by change categories:
+
+* `feature/` - Adding new CLI capabilities, rules, or core modules (e.g. `feature/add-drop-table-rule`)
+* `bugfix/` - Fixing incorrect parser behavior, warnings, or crashes (e.g. `bugfix/parse-null-constraint`)
+* `docs/` - Enhancements to README, guides, or docstrings (e.g. `docs/update-roadmap`)
+* `refactor/` - Structural adjustments without functional changes (e.g. `refactor/config-parser`)
+* `chore/` - Repository updates, CI changes, or package increments (e.g. `chore/bump-dependencies`)
+
+---
+
+## Commit Message Conventions
+
+We adhere strictly to the **Conventional Commits** specification. Every commit message must follow this format:
+
 ```
 <type>(<scope>): <description>
 
@@ -39,39 +69,41 @@ Commit messages should follow the structure:
 [optional footer(s)]
 ```
 
-### Allowed Types
+### Supported Commit Types
+* `feat`: A new user-facing feature.
+* `fix`: A bug fix.
+* `docs`: Documentation updates.
+* `style`: Styling or formatting (white-space, semi-colons) changes.
+* `refactor`: Structural codebase improvements.
+* `perf`: Execution speed or memory footprint enhancements.
+* `test`: Adding or amending test cases.
+* `ci`: Workflow or automation changes.
+* `chore`: Package building or external configuration maintenance.
 
-- `feat`: A new feature
-- `fix`: A bug fix
-- `docs`: Documentation changes
-- `style`: Changes that do not affect the meaning of the code (white-space, formatting, missing semi-colons, etc)
-- `refactor`: A code change that neither fixes a bug nor adds a feature
-- `perf`: A code change that improves performance
-- `test`: Adding missing tests or correcting existing tests
-- `build`: Changes that affect the build system or external dependencies
-- `ci`: Changes to CI configuration files and scripts
-- `chore`: Other changes that don't modify src or test files
+### Scope Guidelines
+The `<scope>` should name the module or subsystem changed (e.g., `cli`, `config`, `rules`, `parser`). 
 
-### Example
-
+Example:
 ```
-feat(cli): add output format flag to verify command
-
-Closes #123
+feat(rules): add safety check for dropping database indexes
 ```
+
+---
 
 ## Pull Request Process
 
-1. Create a new branch from `develop`:
-   ```bash
-   git checkout -b feature/my-amazing-feature develop
-   ```
-2. Make your changes and commit them following the conventional commit guidelines.
-3. Ensure all tests pass and static analysis tools are clean:
-   ```bash
-   uv run pytest
-   uv run mypy src
-   uv run ruff check src
-   ```
-4. Push your branch to GitHub and open a Pull Request against `develop`.
-5. Ensure the CI builds pass. One of the maintainers will review your PR as soon as possible.
+1. **Pull Latest Changes**: Ensure your branch is updated with the latest commits from the `develop` branch.
+2. **Review Code standards**: Run pytest, ruff, and mypy locally. Verify that your tests pass.
+3. **Submit PR**: Target your PR to merge into the `develop` branch.
+4. **Pass Checks**: Confirm that all GitHub Actions CI checks complete successfully.
+5. **Code Review**: At least one maintainer must review and approve your changes before merging.
+
+---
+
+## Coding Standards
+
+To maintain high code quality, Aegis enforces strict coding standards:
+* **Python version compatibility**: The codebase must be compatible with Python 3.11+.
+* **Style Rules**: Checked and enforced by Ruff (configured to follow Black formatting standards with 88-character maximum line length).
+* **Strict Typing**: All functions, variables, and parameters must be explicitly typed. Mypy checks are run in `--strict` mode.
+* **Docstrings**: Add Google-style docstrings for all new modules, classes, and public interfaces.

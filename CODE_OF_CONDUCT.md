@@ -60,8 +60,19 @@ representative at an online or offline event.
 
 Instances of abusive, harassing, or otherwise unacceptable behavior may be
 reported to the community leaders responsible for enforcement at
-conduct@aegis-project.org. All complaints will be reviewed and investigated
+`conduct@aegis-project.org`. All complaints will be reviewed and investigated
 promptly and fairly.
 
 All community leaders are obligated to respect the privacy and security of the
 reporter of any incident.
+
+## Attribution
+
+This Code of Conduct is adapted from the [Contributor Covenant][homepage],
+version 2.1, available at [https://www.contributor-covenant.org/version/2/1/code_of_conduct.html][version].
+
+Guidelines for harassment-free environments can be found in the [FAQ][faq].
+
+[homepage]: https://www.contributor-covenant.org
+[version]: https://www.contributor-covenant.org/version/2/1/code_of_conduct.html
+[faq]: https://www.contributor-covenant.org/faq
