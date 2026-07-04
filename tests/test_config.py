@@ -1,10 +1,10 @@
 from pathlib import Path
-import pytest
+
 from aegis.config import load_config
 
 
 def test_default_config_when_none_provided() -> None:
-    """Verifies that load_config returns default configuration when no file path is specified."""
+    """Verifies load_config returns default settings when path is None."""
     config = load_config(None)
     assert config.dialect == "postgres"
     assert config.rules.allow_drop_table is False
@@ -13,7 +13,7 @@ def test_default_config_when_none_provided() -> None:
 
 
 def test_default_config_when_file_not_found(tmp_path: Path) -> None:
-    """Verifies that load_config returns default configuration if the path doesn't point to an active file."""
+    """Verifies load_config returns defaults when file does not exist."""
     config = load_config(tmp_path / "non_existent_file.toml")
     assert config.dialect == "postgres"
     assert config.rules.allow_drop_table is False
@@ -56,7 +56,7 @@ allow_drop_column = true
 
 
 def test_load_invalid_toml_config_fallback(tmp_path: Path) -> None:
-    """Verifies that load_config gracefully recovers and defaults when the TOML file is invalid."""
+    """Verifies load_config defaults when the TOML file structure is invalid."""
     config_file = tmp_path / "config.toml"
     config_file.write_text(
         """
