@@ -29,37 +29,76 @@ Aegis relies on a carefully curated, modern stack to ensure high performance, de
 
 ## 🚀 Installation
 
+### Using `uv` (recommended)
 ```bash
 # Clone the repository
 git clone https://github.com/aryanp160/aegis.git
 cd aegis
 
-# Install using uv (recommended)
+# Install environment and sync all dependency groups
 uv sync --all-groups
+```
 
-# Or install using standard pip
+### Using standard `pip`
+```bash
 pip install -e .[dev,test]
 ```
 
 ---
 
-## 📖 CLI Usage
+## 🚦 Quick Start
 
-Aegis provides a command-line interface:
+Aegis provides an intuitive command line interface:
 
+### Help Guidelines
+To explore available CLI options and subcommands, run:
 ```bash
-# Display general help
 aegis --help
+```
 
-# Display the version of Aegis
+### Version Checking
+To query the installed release version of Aegis, run:
+```bash
 aegis version
 ```
+
+### Configuration Loader Integration
+Aegis dynamically scans for configurations defined in a `pyproject.toml` file under the `[tool.aegis]` table, or inside a local `aegis.toml` file.
+
+Example TOML config structure:
+```toml
+[tool.aegis]
+dialect = "postgres"
+
+[tool.aegis.rules]
+allow_drop_table = false
+allow_drop_column = false
+allow_rename_table = true
+```
+
+---
+
+## 🗺️ Roadmap
+
+* **v0.2.0**:
+  - Implement full parsing support for multi-statement SQL migration files.
+  - Setup core database dialect mapper using `sqlglot` configurations.
+* **v0.3.0**:
+  - Implement initial static verification rules (e.g. flagging unsafe `DROP TABLE`, `DROP COLUMN`, and `ALTER TABLE` statements).
+  - Add customizable warning severities (Info, Warning, Error).
+* **v0.4.0**:
+  - Integrate visual diagnostics (syntax-highlighted code blocks, error ranges, and resolution hints) using `rich`.
+* **v1.0.0**:
+  - Deliver stable integration plugins for pre-commit hooks, GitHub Actions, and popular CI platforms.
+  - Expose API endpoints for custom third-party rule injection.
 
 ---
 
 ## 🤝 Contributing
 
-We welcome contributions! Please read our [CONTRIBUTING.md](CONTRIBUTING.md) and [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md) before submitting pull requests.
+We welcome contributions from the community! Before submitting pull requests, please read our [CONTRIBUTING.md](CONTRIBUTING.md) to understand branch naming conventions, Conventional Commit formatting, and development loop setup instructions.
+
+Please also review our [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md) for community guidelines.
 
 ## 📄 License
 
