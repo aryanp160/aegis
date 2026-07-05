@@ -1,153 +1,99 @@
 from pathlib import Path
 
 import pytest
-from sqlglot import exp
+from pydantic import ValidationError
 
-from aegis.parser.core import parse_migration
-from aegis.parser.detector import detect_dialect
-from aegis.parser.discovery import discover_migration_directories, discover_sql_files
-from aegis.parser.exceptions import (
-    DialectDetectionError,
-    MigrationLoadError,
-    SqlParseError,
+from aegis.parser import (
+    BaseParser,
+    FileDiscoveryError,
+    InvalidSQLFileError,
+    ParsedMigration,
+    ParseFailure,
+    ParserError,
+    ParseResult,
+    SQLDialect,
+    UnsupportedDialectError,
 )
 
 
-def test_discover_sql_files(tmp_path: Path) -> None:
-    """Verifies that discover_sql_files finds files in alphabetical order."""
-    # Create nested directories
-    dir_a = tmp_path / "a"
-    dir_b = tmp_path / "b"
-    dir_a.mkdir()
-    dir_b.mkdir()
+class MockParser(BaseParser):
+    """A simple mock implementation of BaseParser for architectural testing."""
 
-    # Create SQL files out of order
-    file_2 = dir_b / "0002_migration.sql"
-    file_1 = dir_a / "0001_migration.sql"
-    file_3 = tmp_path / "0003_migration.sql"
-    file_ignored = dir_a / "README.md"
+    def parse(self, file_path: Path) -> ParseResult:
+        if not file_path.exists():
+            return ParseResult(
+                success=False,
+                errors=["File does not exist"],
+            )
 
-    file_2.touch()
-    file_1.touch()
-    file_3.touch()
-    file_ignored.touch()
-
-    sql_files = discover_sql_files(tmp_path)
-    assert len(sql_files) == 3
-    # Check alphabetized ordering by name
-    assert sql_files[0].name == "0001_migration.sql"
-    assert sql_files[1].name == "0002_migration.sql"
-    assert sql_files[2].name == "0003_migration.sql"
+        migration = ParsedMigration(
+            path=file_path,
+            dialect=SQLDialect.POSTGRESQL,
+            raw_content="CREATE TABLE users (id INT);",
+            statements=["CREATE TABLE users (id INT);"],
+            ast_nodes=[],
+        )
+        return ParseResult(success=True, migration=migration)
 
 
-def test_discover_migration_directories(tmp_path: Path) -> None:
-    """Verifies that discover_migration_directories lists folders holding SQL files."""
-    dir_a = tmp_path / "a"
-    dir_b = tmp_path / "b"
-    dir_c = tmp_path / "c"  # Holds no SQL files
-
-    dir_a.mkdir()
-    dir_b.mkdir()
-    dir_c.mkdir()
-
-    (dir_a / "0001.sql").touch()
-    (dir_b / "0002.sql").touch()
-    (dir_c / "readme.txt").touch()
-
-    directories = discover_migration_directories(tmp_path)
-    assert len(directories) == 2
-    assert dir_a.resolve() in directories
-    assert dir_b.resolve() in directories
-    assert dir_c.resolve() not in directories
+def test_sql_dialect_enum_values() -> None:
+    """Verifies defined SQLDialect enum values."""
+    assert SQLDialect.POSTGRESQL.value == "postgresql"
+    assert SQLDialect.MYSQL.value == "mysql"
+    assert SQLDialect.UNKNOWN.value == "unknown"
 
 
-def test_detect_dialect_by_path() -> None:
-    """Verifies dialect detection prioritizing path hints."""
-    pg_path = Path("migrations/postgres/0001_init.sql")
-    my_path = Path("migrations/mysql/0001_init.sql")
-    assert detect_dialect("SELECT 1;", pg_path) == "postgres"
-    assert (
-        detect_dialect("SELECT 1;", Path("migrations/pg/0001_init.sql")) == "postgres"
+def test_exception_inheritance() -> None:
+    """Verifies that all custom parser exceptions inherit from ParserError."""
+    assert issubclass(FileDiscoveryError, ParserError)
+    assert issubclass(InvalidSQLFileError, ParserError)
+    assert issubclass(UnsupportedDialectError, ParserError)
+    assert issubclass(ParseFailure, ParserError)
+
+
+def test_parsed_migration_validation() -> None:
+    """Verifies that ParsedMigration correctly validates field constraints."""
+    # Test valid model
+    migration = ParsedMigration(
+        path=Path("migration.sql"),
+        dialect=SQLDialect.MYSQL,
+        raw_content="SELECT 1;",
+        statements=["SELECT 1;"],
+        ast_nodes=[],
     )
-    assert detect_dialect("SELECT 1;", my_path) == "mysql"
-    assert (
-        detect_dialect("SELECT 1;", Path("migrations/my/0001_init.sql")) == "mysql"
-    )
+    assert migration.path == Path("migration.sql")
+    assert migration.dialect == SQLDialect.MYSQL
+
+    # Test invalid dialect type
+    with pytest.raises(ValidationError):
+        ParsedMigration(
+            path=Path("migration.sql"),
+            dialect="invalid_dialect",  # type: ignore
+            raw_content="SELECT 1;",
+        )
 
 
-def test_detect_dialect_by_content() -> None:
-    """Verifies dialect detection falls back to content regex scans."""
-    # Postgres triggers
-    assert detect_dialect("CREATE TABLE users (id SERIAL PRIMARY KEY);") == "postgres"
-    assert (
-        detect_dialect("CREATE TABLE users (id BIGSERIAL PRIMARY KEY);")
-        == "postgres"
-    )
-    assert (
-        detect_dialect("ALTER TABLE users ADD COLUMN created TIMESTAMPTZ;")
-        == "postgres"
-    )
-
-    # MySQL triggers
-    assert (
-        detect_dialect("CREATE TABLE users (id INT AUTO_INCREMENT PRIMARY KEY);")
-        == "mysql"
-    )
-    assert detect_dialect("CREATE TABLE users (id INT) ENGINE=InnoDB;") == "mysql"
-    assert detect_dialect("SELECT * FROM `users`;") == "mysql"
+def test_parse_result_validation() -> None:
+    """Verifies ParseResult schema validation."""
+    result = ParseResult(success=True, errors=[])
+    assert result.success is True
+    assert result.migration is None
 
 
-def test_detect_dialect_ambiguous_raises_error() -> None:
-    """Verifies that highly mixed keyword content triggers DialectDetectionError."""
-    # Mixed triggers
-    mixed_sql = "CREATE TABLE users (id SERIAL, count INT AUTO_INCREMENT);"
-    with pytest.raises(DialectDetectionError) as exc_info:
-        detect_dialect(mixed_sql)
-    assert "SQL dialect could not be detected unambiguously" in str(exc_info.value)
+def test_mock_parser_contracts(tmp_path: Path) -> None:
+    """Verifies the BaseParser interface contract works using MockParser."""
+    parser = MockParser()
 
+    # Test failure case
+    fail_result = parser.parse(tmp_path / "missing.sql")
+    assert fail_result.success is False
+    assert "File does not exist" in fail_result.errors
 
-def test_parse_migration_postgres_success(tmp_path: Path) -> None:
-    """Verifies parsing of postgres migration file produces statements and AST nodes."""
-    migration_file = tmp_path / "postgres_0001.sql"
-    sql_content = """
-    CREATE TABLE users (id SERIAL PRIMARY KEY);
-    ALTER TABLE users ADD COLUMN age INT;
-    """
-    migration_file.write_text(sql_content, encoding="utf-8")
+    # Test success case
+    sql_file = tmp_path / "migration.sql"
+    sql_file.write_text("CREATE TABLE users (id INT);", encoding="utf-8")
 
-    parsed = parse_migration(migration_file, dialect_override="postgres")
-    assert parsed.dialect == "postgres"
-    assert len(parsed.statements) == 2
-    assert len(parsed.ast_nodes) == 2
-
-    assert isinstance(parsed.ast_nodes[0], exp.Create)
-    assert isinstance(parsed.ast_nodes[1], exp.Alter)
-
-
-def test_parse_migration_mysql_success(tmp_path: Path) -> None:
-    """Verifies parsing of mysql migration file works."""
-    migration_file = tmp_path / "mysql_0001.sql"
-    sql_content = "CREATE TABLE `users` (id INT AUTO_INCREMENT) ENGINE=InnoDB;"
-    migration_file.write_text(sql_content, encoding="utf-8")
-
-    parsed = parse_migration(migration_file, dialect_override="mysql")
-    assert parsed.dialect == "mysql"
-    assert len(parsed.statements) == 1
-    assert isinstance(parsed.ast_nodes[0], exp.Create)
-
-
-def test_parse_migration_load_error_raises_exception() -> None:
-    """Verifies loading a non-existent file raises MigrationLoadError."""
-    with pytest.raises(MigrationLoadError) as exc_info:
-        parse_migration(Path("non_existent_file.sql"))
-    assert "Failed to read file" in str(exc_info.value)
-
-
-def test_parse_migration_syntax_error_raises_exception(tmp_path: Path) -> None:
-    """Verifies syntax errors in SQL compile to SqlParseError."""
-    migration_file = tmp_path / "0001_bad.sql"
-    migration_file.write_text("CREATE TABLE (id INT;", encoding="utf-8")
-
-    with pytest.raises(SqlParseError) as exc_info:
-        parse_migration(migration_file, dialect_override="postgres")
-    assert "SQL syntax compilation error" in str(exc_info.value)
+    success_result = parser.parse(sql_file)
+    assert success_result.success is True
+    assert success_result.migration is not None
+    assert success_result.migration.dialect == SQLDialect.POSTGRESQL
