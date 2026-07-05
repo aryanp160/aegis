@@ -48,49 +48,58 @@ pip install -e .[dev,test]
 
 ## 🚦 Quick Start
 
-Aegis provides an intuitive command line interface:
+### SQL Parser API
+Aegis provides a type-safe Python API for SQL migration discovery and parsing.
 
-### Help Guidelines
+```python
+from pathlib import Path
+from aegis.parser import parse, parse_directory
+
+# 1. Parse a single SQL migration file
+result = parse(Path("examples/postgres/0001_init.sql"))
+if result.success and result.migration:
+    print(f"Dialect: {result.migration.dialect}")
+    print(f"SQL statements count: {len(result.migration.statements)}")
+    # Access the sqlglot AST nodes
+    for ast_node in result.migration.ast_nodes:
+        print(type(ast_node))
+else:
+    print(f"Errors occurred: {result.errors}")
+
+# 2. Parse an entire migration directory recursively
+results = parse_directory(Path("examples/"))
+for res in results:
+    if res.success and res.migration:
+        print(f"Parsed {res.migration.path.name}")
+```
+
+### CLI Guidelines
 To explore available CLI options and subcommands, run:
 ```bash
 aegis --help
 ```
 
-### Version Checking
-To query the installed release version of Aegis, run:
+---
+
+## ⚡ Performance Benchmarks
+To run performance latency and throughput benchmarks for the SQL Parser core:
 ```bash
-aegis version
-```
-
-### Configuration Loader Integration
-Aegis dynamically scans for configurations defined in a `pyproject.toml` file under the `[tool.aegis]` table, or inside a local `aegis.toml` file.
-
-Example TOML config structure:
-```toml
-[tool.aegis]
-dialect = "postgres"
-
-[tool.aegis.rules]
-allow_drop_table = false
-allow_drop_column = false
-allow_rename_table = true
+python benchmarks/benchmark_parser.py
 ```
 
 ---
 
 ## 🗺️ Roadmap
 
-* **v0.2.0**:
-  - Implement full parsing support for multi-statement SQL migration files.
-  - Setup core database dialect mapper using `sqlglot` configurations.
-* **v0.3.0**:
-  - Implement initial static verification rules (e.g. flagging unsafe `DROP TABLE`, `DROP COLUMN`, and `ALTER TABLE` statements).
-  - Add customizable warning severities (Info, Warning, Error).
-* **v0.4.0**:
-  - Integrate visual diagnostics (syntax-highlighted code blocks, error ranges, and resolution hints) using `rich`.
-* **v1.0.0**:
-  - Deliver stable integration plugins for pre-commit hooks, GitHub Actions, and popular CI platforms.
-  - Expose API endpoints for custom third-party rule injection.
+* **v0.2.0-alpha.1** (Completed):
+  - Structured SQL parser package core with `StrEnum` dialects and Pydantic models.
+  - Recursion discovery, BOM-stripping loader, and path-keyword heuristic dialect detectors.
+  - Fully integrated `sqlglot` AST compilers and statements formatting generators.
+* **v0.3.0-alpha.1** (Next Milestone):
+  - Setup core static analyzer Rule Engine and severity mapping.
+  - Implement rules checking for destructive schema modifications: AEG-101 (`DROP TABLE`), AEG-102 (`DROP COLUMN`), etc.
+* **v0.4.0-beta.1**:
+  - Deliver command-line commands `aegis lint` and `aegis explain` rendering diagnostics using `rich`.
 
 ---
 

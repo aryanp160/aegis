@@ -168,8 +168,7 @@ def test_detect_dialect_by_content() -> None:
         == SQLDialect.MYSQL
     )
     assert (
-        detect_dialect("CREATE TABLE users (id INT) ENGINE=InnoDB;")
-        == SQLDialect.MYSQL
+        detect_dialect("CREATE TABLE users (id INT) ENGINE=InnoDB;") == SQLDialect.MYSQL
     )
     assert detect_dialect("SELECT * FROM `users`;") == SQLDialect.MYSQL
 
