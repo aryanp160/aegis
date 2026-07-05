@@ -1,3 +1,4 @@
+from aegis.parser.discovery import discover_migration_files
 from aegis.parser.enums import SQLDialect
 from aegis.parser.errors import (
     FileDiscoveryError,
@@ -7,6 +8,7 @@ from aegis.parser.errors import (
     UnsupportedDialectError,
 )
 from aegis.parser.interfaces import BaseParser
+from aegis.parser.loader import load_migration_file
 from aegis.parser.models import ParsedMigration, ParseResult
 
 __all__ = [
@@ -19,4 +21,6 @@ __all__ = [
     "InvalidSQLFileError",
     "UnsupportedDialectError",
     "ParseFailure",
+    "discover_migration_files",
+    "load_migration_file",
 ]
