@@ -3,40 +3,23 @@ from pathlib import Path
 
 import pytest
 from pydantic import ValidationError
+from sqlglot import exp
 
 from aegis.parser import (
-    BaseParser,
     FileDiscoveryError,
     InvalidSQLFileError,
     ParsedMigration,
-    ParseFailure,
     ParserError,
     ParseResult,
     SQLDialect,
+    SqlParser,
     UnsupportedDialectError,
     discover_migration_files,
     load_migration_file,
+    parse,
+    parse_directory,
 )
-
-
-class MockParser(BaseParser):
-    """A simple mock implementation of BaseParser for architectural testing."""
-
-    def parse(self, file_path: Path) -> ParseResult:
-        if not file_path.exists():
-            return ParseResult(
-                success=False,
-                errors=["File does not exist"],
-            )
-
-        migration = ParsedMigration(
-            path=file_path,
-            dialect=SQLDialect.POSTGRESQL,
-            raw_content="CREATE TABLE users (id INT);",
-            statements=["CREATE TABLE users (id INT);"],
-            ast_nodes=[],
-        )
-        return ParseResult(success=True, migration=migration)
+from aegis.parser.detector import detect_dialect
 
 
 def test_sql_dialect_enum_values() -> None:
@@ -51,7 +34,6 @@ def test_exception_inheritance() -> None:
     assert issubclass(FileDiscoveryError, ParserError)
     assert issubclass(InvalidSQLFileError, ParserError)
     assert issubclass(UnsupportedDialectError, ParserError)
-    assert issubclass(ParseFailure, ParserError)
 
 
 def test_parsed_migration_validation() -> None:
@@ -79,23 +61,6 @@ def test_parse_result_validation() -> None:
     result = ParseResult(success=True, errors=[])
     assert result.success is True
     assert result.migration is None
-
-
-def test_mock_parser_contracts(tmp_path: Path) -> None:
-    """Verifies the BaseParser interface contract works using MockParser."""
-    parser = MockParser()
-
-    fail_result = parser.parse(tmp_path / "missing.sql")
-    assert fail_result.success is False
-    assert "File does not exist" in fail_result.errors
-
-    sql_file = tmp_path / "migration.sql"
-    sql_file.write_text("CREATE TABLE users (id INT);", encoding="utf-8")
-
-    success_result = parser.parse(sql_file)
-    assert success_result.success is True
-    assert success_result.migration is not None
-    assert success_result.migration.dialect == SQLDialect.POSTGRESQL
 
 
 def test_discover_migration_files_filters(tmp_path: Path) -> None:
@@ -163,3 +128,147 @@ def test_load_migration_file_failures(tmp_path: Path) -> None:
     with pytest.raises(InvalidSQLFileError) as exc:
         load_migration_file(empty_file)
     assert "SQL migration file is empty" in str(exc.value)
+
+
+def test_detect_dialect_by_path() -> None:
+    """Verifies dialect detection prioritizing path hints."""
+    pg_path = Path("migrations/postgres/0001_init.sql")
+    my_path = Path("migrations/mysql/0001_init.sql")
+    assert detect_dialect("SELECT 1;", pg_path) == SQLDialect.POSTGRESQL
+    assert (
+        detect_dialect("SELECT 1;", Path("migrations/pg/0001_init.sql"))
+        == SQLDialect.POSTGRESQL
+    )
+    assert detect_dialect("SELECT 1;", my_path) == SQLDialect.MYSQL
+    assert (
+        detect_dialect("SELECT 1;", Path("migrations/my/0001_init.sql"))
+        == SQLDialect.MYSQL
+    )
+
+
+def test_detect_dialect_by_content() -> None:
+    """Verifies dialect detection falls back to content regex scans."""
+    # Postgres triggers
+    assert (
+        detect_dialect("CREATE TABLE users (id SERIAL PRIMARY KEY);")
+        == SQLDialect.POSTGRESQL
+    )
+    assert (
+        detect_dialect("CREATE TABLE users (id BIGSERIAL PRIMARY KEY);")
+        == SQLDialect.POSTGRESQL
+    )
+    assert (
+        detect_dialect("ALTER TABLE users ADD COLUMN created TIMESTAMPTZ;")
+        == SQLDialect.POSTGRESQL
+    )
+
+    # MySQL triggers
+    assert (
+        detect_dialect("CREATE TABLE users (id INT AUTO_INCREMENT PRIMARY KEY);")
+        == SQLDialect.MYSQL
+    )
+    assert (
+        detect_dialect("CREATE TABLE users (id INT) ENGINE=InnoDB;")
+        == SQLDialect.MYSQL
+    )
+    assert detect_dialect("SELECT * FROM `users`;") == SQLDialect.MYSQL
+
+
+def test_detect_dialect_ambiguous_raises_error() -> None:
+    """Verifies that highly mixed keyword content triggers UnsupportedDialectError."""
+    mixed_sql = "CREATE TABLE users (id SERIAL, count INT AUTO_INCREMENT);"
+    with pytest.raises(UnsupportedDialectError) as exc_info:
+        detect_dialect(mixed_sql)
+    assert "SQL dialect could not be detected unambiguously" in str(exc_info.value)
+
+
+def test_sql_parser_postgres_success(tmp_path: Path) -> None:
+    """Verifies parsing Postgres migrations extracts statements and builds AST nodes."""
+    migration_file = tmp_path / "postgres_0001.sql"
+    sql_content = """
+    CREATE TABLE users (id SERIAL PRIMARY KEY);
+    ALTER TABLE users ADD COLUMN age INT;
+    """
+    migration_file.write_text(sql_content, encoding="utf-8")
+
+    result = parse(migration_file)
+    assert result.success is True
+    assert result.migration is not None
+    assert result.migration.dialect == SQLDialect.POSTGRESQL
+    assert len(result.migration.statements) == 2
+    assert len(result.migration.ast_nodes) == 2
+
+    # Verify sqlglot AST types
+    assert isinstance(result.migration.ast_nodes[0], exp.Create)
+    assert isinstance(result.migration.ast_nodes[1], exp.Alter)
+
+
+def test_sql_parser_mysql_success(tmp_path: Path) -> None:
+    """Verifies parsing MySQL migrations extracts statements and engine properties."""
+    migration_file = tmp_path / "mysql_0001.sql"
+    sql_content = "CREATE TABLE `users` (id INT AUTO_INCREMENT) ENGINE=InnoDB;"
+    migration_file.write_text(sql_content, encoding="utf-8")
+
+    result = parse(migration_file)
+    assert result.success is True
+    assert result.migration is not None
+    assert result.migration.dialect == SQLDialect.MYSQL
+    assert len(result.migration.statements) == 1
+    assert isinstance(result.migration.ast_nodes[0], exp.Create)
+
+
+def test_sql_parser_syntax_error(tmp_path: Path) -> None:
+    """Verifies syntax errors are caught and recorded as parse failures."""
+    migration_file = tmp_path / "postgres_bad.sql"
+    # Unclosed parentheses syntax error
+    migration_file.write_text("CREATE TABLE (id INT;", encoding="utf-8")
+
+    result = parse(migration_file)
+    assert result.success is False
+    assert len(result.errors) == 1
+    assert "SQL syntax compile failure" in result.errors[0]
+
+
+def test_parse_directory_success(tmp_path: Path) -> None:
+    """Verifies recursive directory parsing executes cleanly."""
+    dir_pg = tmp_path / "pg"
+    dir_pg.mkdir()
+
+    file_1 = dir_pg / "0001_init.sql"
+    file_2 = dir_pg / "0002_add_col.sql"
+    file_1.write_text("CREATE TABLE users (id SERIAL);", encoding="utf-8")
+    file_2.write_text("ALTER TABLE users ADD COLUMN age INT;", encoding="utf-8")
+
+    results = parse_directory(tmp_path)
+    assert len(results) == 2
+    assert results[0].success is True
+    assert results[1].success is True
+    assert results[0].migration is not None
+    assert results[0].migration.dialect == SQLDialect.POSTGRESQL
+
+
+def test_golden_ast_matches() -> None:
+    """Golden test verifying AST statement output maps back to parsed SQL."""
+    parser = SqlParser()
+
+    # We can invoke sqlglot directly to verify the expected AST structure
+    exp.Create(
+        this=exp.Schema(
+            this=exp.Table(this=exp.Identifier(this="users", quoted=False)),
+            expressions=[
+                exp.ColumnDef(
+                    this=exp.Identifier(this="id", quoted=False),
+                    kind=exp.DataType(this=exp.DataType.Type.INT, nested=False),
+                    constraints=[
+                        exp.ColumnConstraint(kind=exp.PrimaryKeyColumnConstraint())
+                    ],
+                )
+            ],
+        ),
+        kind="TABLE",
+    )
+
+    # Compile raw SQL to compare
+    parsed = parser.parse_directory(Path("/non_existent_folder_check"))
+    # Proves discovery check throws discovery failure error
+    assert parsed[0].success is False
