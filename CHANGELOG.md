@@ -5,6 +5,20 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.2.0-alpha.1] - 2026-07-05
+
+### Added
+- Dialect-aware SQL Parser core package `src/aegis/parser/`.
+- Convenient public helper APIs `parse` and `parse_directory`.
+- Heuristic dialect detection support for `postgresql` and `mysql` schemas.
+- `sqlglot` AST compilers translating SQL content strings to Expression arrays.
+- Pydantic models `ParsedMigration` and `ParseResult` to map parser results.
+- `SQLDialect` StrEnum defining supported migration dialects.
+- Custom structured exception classes inheriting from `ParserError`.
+- Safe recursive file scanner ignoring python cache files, hidden files, and circular symlinks.
+- SQL parsing performance benchmarking script `benchmarks/benchmark_parser.py`.
+- Parser architecture layout documentation `docs/architecture.md`.
+
 ## [0.1.0-alpha.1] - 2026-07-04
 
 ### Added
