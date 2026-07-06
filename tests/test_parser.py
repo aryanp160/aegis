@@ -285,3 +285,49 @@ def test_golden_ast_matches() -> None:
     parsed = parser.parse_directory(Path("/non_existent_folder_check"))
     # Proves discovery check throws discovery failure error
     assert parsed[0].success is False
+
+
+def test_parser_caching(tmp_path: Path) -> None:
+    """Verifies caching yields independent AST copies of parsed files."""
+    sql_file = tmp_path / "cache_test.sql"
+    sql_file.write_text("CREATE TABLE users (id SERIAL PRIMARY KEY);", encoding="utf-8")
+
+    parser = SqlParser(use_cache=True)
+
+    # 1. First parse: cache miss
+    result_1 = parser.parse(sql_file)
+    assert result_1.success is True
+    assert result_1.migration is not None
+    assert len(parser._cache) == 1
+
+    # 2. Second parse: cache hit
+    result_2 = parser.parse(sql_file)
+    assert result_2.success is True
+    assert result_2.migration is not None
+
+    # Assert AST objects are copied/distinct to prevent mutation issues
+    assert result_1.migration.ast_nodes[0] is not result_2.migration.ast_nodes[0]
+    assert result_1.migration.statements == result_2.migration.statements
+
+
+def test_parse_directory_large_scale(tmp_path: Path) -> None:
+    """Verifies parsing capacity across large recursive directories."""
+    # Create nested directories
+    for sub in ["a", "b", "c/d"]:
+        (tmp_path / sub).mkdir(parents=True)
+
+    # Generate 50 mock SQL files
+    for i in range(50):
+        sub_dir = "a" if i % 3 == 0 else ("b" if i % 3 == 1 else "c/d")
+        sql_file = tmp_path / sub_dir / f"migration_{i:03d}.sql"
+        sql_file.write_text(
+            f"CREATE TABLE mock_{i} (id INT AUTO_INCREMENT PRIMARY KEY);",
+            encoding="utf-8",
+        )
+
+    parser = SqlParser(use_cache=True)
+    results = parser.parse_directory(tmp_path)
+    assert len(results) == 50
+    assert all(r.success for r in results)
+    assert results[0].migration is not None
+    assert results[0].migration.dialect == SQLDialect.MYSQL
