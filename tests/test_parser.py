@@ -6,6 +6,7 @@ from pydantic import ValidationError
 from sqlglot import exp
 
 from aegis.parser import (
+    EmptySQLFileError,
     FileDiscoveryError,
     InvalidSQLFileError,
     ParsedMigration,
@@ -13,6 +14,7 @@ from aegis.parser import (
     ParseResult,
     SQLDialect,
     SqlParser,
+    UnreadableFileError,
     UnsupportedDialectError,
     discover_migration_files,
     load_migration_file,
@@ -116,18 +118,28 @@ def test_load_migration_file_success(tmp_path: Path) -> None:
 
 
 def test_load_migration_file_failures(tmp_path: Path) -> None:
-    """Verifies loader triggers InvalidSQLFileError on invalid parameters."""
+    """Verifies loader triggers granular errors on invalid parameters."""
     # File not found
-    with pytest.raises(InvalidSQLFileError) as exc:
+    with pytest.raises(UnreadableFileError) as exc_unreadable:
         load_migration_file(tmp_path / "missing_file.sql")
-    assert "Migration file does not exist" in str(exc.value)
+    assert "Migration file does not exist" in str(exc_unreadable.value)
 
     # Empty file
     empty_file = tmp_path / "empty.sql"
     empty_file.touch()
-    with pytest.raises(InvalidSQLFileError) as exc:
+    with pytest.raises(EmptySQLFileError) as exc_empty:
         load_migration_file(empty_file)
-    assert "SQL migration file is empty" in str(exc.value)
+    assert "SQL migration file contains no executable SQL" in str(exc_empty.value)
+
+    # File containing only comments
+    comments_file = tmp_path / "comments.sql"
+    comments_file.write_text(
+        "-- This is a single line comment\n/* Multi-line\ncomment block */",
+        encoding="utf-8",
+    )
+    with pytest.raises(EmptySQLFileError) as exc_comments:
+        load_migration_file(comments_file)
+    assert "SQL migration file contains no executable SQL" in str(exc_comments.value)
 
 
 def test_detect_dialect_by_path() -> None:
@@ -226,6 +238,8 @@ def test_sql_parser_syntax_error(tmp_path: Path) -> None:
     assert result.success is False
     assert len(result.errors) == 1
     assert "SQL syntax compile failure" in result.errors[0]
+    assert "Line 1" in result.errors[0]
+    assert "Col 14" in result.errors[0]
 
 
 def test_parse_directory_success(tmp_path: Path) -> None:

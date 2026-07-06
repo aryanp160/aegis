@@ -47,7 +47,20 @@ class SqlParser(BaseParser):
                     list[Expression], [node for node in nodes if node is not None]
                 )
             except sqlglot.errors.ParseError as e:
-                raise ParseFailure(f"SQL syntax compile failure: {e}") from e
+                # Compile detailed line and column diagnostics from sqlglot errors
+                diag_messages = []
+                for error in e.errors:
+                    line = error.get("line")
+                    col = error.get("col")
+                    description = error.get("description")
+                    diag_messages.append(f"Line {line}, Col {col}: {description}")
+
+                if diag_messages:
+                    err_msg = "SQL syntax compile failure:\n" + "\n".join(diag_messages)
+                else:
+                    err_msg = f"SQL syntax compile failure: {e}"
+
+                raise ParseFailure(err_msg) from e
             except Exception as e:
                 raise ParseFailure(f"Failed to parse SQL content: {e}") from e
 
