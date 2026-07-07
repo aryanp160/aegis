@@ -49,13 +49,14 @@ pip install -e .[dev,test]
 ## 🚦 Quick Start
 
 ### SQL Parser API
-Aegis provides a type-safe Python API for SQL migration discovery and parsing.
+Aegis provides a type-safe Python API for SQL migration discovery, loading, validation, and parsing.
 
+#### 1. Standard Parsing
 ```python
 from pathlib import Path
 from aegis.parser import parse, parse_directory
 
-# 1. Parse a single SQL migration file
+# Parse a single SQL migration file
 result = parse(Path("examples/postgres/0001_init.sql"))
 if result.success and result.migration:
     print(f"Dialect: {result.migration.dialect}")
@@ -66,17 +67,31 @@ if result.success and result.migration:
 else:
     print(f"Errors occurred: {result.errors}")
 
-# 2. Parse an entire migration directory recursively
+# Parse an entire migration directory recursively
 results = parse_directory(Path("examples/"))
 for res in results:
     if res.success and res.migration:
         print(f"Parsed {res.migration.path.name}")
 ```
 
-### CLI Guidelines
-To explore available CLI options and subcommands, run:
-```bash
-aegis --help
+#### 2. Advanced Diagnostic Validation Error Handling
+The parser isolates validation errors (empty files, comments-only files, unreadable files) and syntax compilation diagnostics (including line and column numbers).
+
+```python
+from pathlib import Path
+from aegis.parser import SqlParser
+
+parser = SqlParser(use_cache=True)
+
+# Parse a file containing syntax errors
+result = parser.parse(Path("tests/bad_migration.sql"))
+if not result.success:
+    print("Parsing Failed!")
+    for error in result.errors:
+        # Will output line and column information if available:
+        # e.g., "SQL syntax compile failure:
+        # Line 1, Col 14: Expected table name..."
+        print(error)
 ```
 
 ---
@@ -95,9 +110,14 @@ python benchmarks/benchmark_parser.py
   - Structured SQL parser package core with `StrEnum` dialects and Pydantic models.
   - Recursion discovery, BOM-stripping loader, and path-keyword heuristic dialect detectors.
   - Fully integrated `sqlglot` AST compilers and statements formatting generators.
+* **v0.2.0-alpha.2** (Completed):
+  - Added granular exceptions (`EmptySQLFileError`, `UnreadableFileError`).
+  - Added line and column diagnostic compilation on SQL syntax errors.
+  - Optimized file scanner traversing folders without redundant resolution checks.
+  - Added optional AST caching to improve parsing latency.
 * **v0.3.0-alpha.1** (Next Milestone):
   - Setup core static analyzer Rule Engine and severity mapping.
-  - Implement rules checking for destructive schema modifications: AEG-101 (`DROP TABLE`), AEG-102 (`DROP COLUMN`), etc.
+  - Implement rules checking for destructive database schema modifications: AEG-101 (`DROP TABLE`), AEG-102 (`DROP COLUMN`), etc.
 * **v0.4.0-beta.1**:
   - Deliver command-line commands `aegis lint` and `aegis explain` rendering diagnostics using `rich`.
 

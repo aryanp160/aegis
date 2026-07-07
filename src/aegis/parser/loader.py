@@ -1,11 +1,21 @@
 import logging
+import re
 from pathlib import Path
 
 from aegis.parser.enums import SQLDialect
-from aegis.parser.errors import InvalidSQLFileError
+from aegis.parser.errors import EmptySQLFileError, UnreadableFileError
 from aegis.parser.models import ParsedMigration
 
 logger = logging.getLogger("aegis.parser.loader")
+
+
+def is_empty_sql(content: str) -> bool:
+    """Helper to detect if SQL content contains only comments and whitespaces."""
+    # Remove single line comments starting with --
+    content_no_comments = re.sub(r"--.*$", "", content, flags=re.MULTILINE)
+    # Remove block comments /* ... */
+    content_no_comments = re.sub(r"/\*.*?\*/", "", content_no_comments, flags=re.DOTALL)
+    return not content_no_comments.strip()
 
 
 def load_migration_file(file_path: Path) -> ParsedMigration:
@@ -20,24 +30,29 @@ def load_migration_file(file_path: Path) -> ParsedMigration:
         A ParsedMigration containing path metadata and raw SQL content.
 
     Raises:
-        InvalidSQLFileError: If the file is unreadable, missing, or empty.
+        UnreadableFileError: If the file is missing, a directory, or fails to read.
+        EmptySQLFileError: If the file is empty or contains only comments.
     """
     logger.info("Loading SQL migration file: %s", file_path)
 
     # 1. Path validations
     if not file_path.is_file():
-        raise InvalidSQLFileError(f"Migration file does not exist: {file_path}")
+        raise UnreadableFileError(
+            f"Migration file does not exist or is not a file: {file_path}"
+        )
 
     # 2. Content reading (with UTF-8 and BOM signature handling)
     try:
         with open(file_path, encoding="utf-8-sig") as f:
             content = f.read()
     except Exception as e:
-        raise InvalidSQLFileError(f"Failed to read file {file_path}: {e}") from e
+        raise UnreadableFileError(f"Failed to read file {file_path}: {e}") from e
 
-    # 3. Size validation
-    if not content.strip():
-        raise InvalidSQLFileError(f"SQL migration file is empty: {file_path}")
+    # 3. Content emptiness/comments validation
+    if is_empty_sql(content):
+        raise EmptySQLFileError(
+            f"SQL migration file contains no executable SQL: {file_path}"
+        )
 
     # 4. ParsedMigration construction (ast_nodes and statements remain empty for now)
     return ParsedMigration(

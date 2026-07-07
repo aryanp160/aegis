@@ -31,39 +31,99 @@ Aegis is built upon the principles of **Clean Architecture** and **SOLID design 
 
 ---
 
-## Parser Core Pipeline
+## Parser Architecture Diagrams
 
-The core parser parses raw migration SQL files into structured, dialect-aware `sqlglot` Abstract Syntax Trees (ASTs). The pipeline consists of the following stages:
+### 1. Module Relationships (Mermaid Class Diagram)
 
+```mermaid
+classDiagram
+    class BaseParser {
+        <<interface>>
+        +parse(file_path: Path) ParseResult*
+    }
+
+    class SqlParser {
+        +use_cache: bool
+        -_cache: dict
+        +parse(file_path: Path) ParseResult
+        +parse_directory(directory_path: Path) list~ParseResult~
+    }
+
+    class ParsedMigration {
+        +path: Path
+        +dialect: SQLDialect
+        +raw_content: str
+        +statements: list~str~
+        +ast_nodes: list~Any~
+    }
+
+    class ParseResult {
+        +success: bool
+        +migration: ParsedMigration?
+        +errors: list~str~
+    }
+
+    class SQLDialect {
+        <<enumeration>>
+        POSTGRESQL
+        MYSQL
+        UNKNOWN
+    }
+
+    BaseParser <|.. SqlParser : Realizes
+    SqlParser ..> ParseResult : Produces
+    ParseResult --> ParsedMigration : Contains
+    ParsedMigration --> SQLDialect : Identifies
 ```
-File Discovery
-      ↓
-Migration Loader (UTF-8, BOM Handling, Pydantic validation)
-      ↓
-Dialect Detection (PostgreSQL / MySQL checks)
-      ↓
-sqlglot AST Compiler
-      ↓
-ParsedMigration Metadata Output
+
+### 2. Processing Pipeline Flowchart
+
+```mermaid
+flowchart TD
+    Start([Start Parse]) --> Load[loader.load_migration_file]
+    Load --> Read[Read file & Strip BOM]
+    Read --> EmptyCheck{Is SQL empty?}
+    EmptyCheck -- Yes --> EmptyErr[Raise EmptySQLFileError]
+    EmptyCheck -- No --> Detect[detector.detect_dialect]
+    Detect --> CacheCheck{Cache enabled & Hit?}
+    
+    CacheCheck -- Yes --> Retrieve[Retrieve Cloned AST & Statements]
+    Retrieve --> SuccessState([Return success ParseResult])
+    
+    CacheCheck -- No --> ParseGlot[Compile sqlglot AST]
+    ParseGlot --> CompileCheck{Syntax Success?}
+    CompileCheck -- No --> ParseErr[Raise ParseFailure with Line/Col details]
+    CompileCheck -- Yes --> SaveCache[Save to Cache]
+    SaveCache --> SuccessState
+    
+    EmptyErr --> FailState([Return failed ParseResult])
+    ParseErr --> FailState
 ```
 
-### 1. File Discovery
-* **File Scans**: Traverses target directories recursively.
-* **Filters**: Skips hidden directories (`.*`), Python compilation directories (`__pycache__`), and matches only files with `.sql` suffixes.
-* **Symlink Loop Safety**: Resolves absolute canonical paths and maps visited paths to prevent recursive directory lookup cycles.
-* **Deterministic Runs**: Discovered file lists are sorted alphabetically to guarantee consistent migration analysis order.
+---
 
-### 2. Migration Loader
-* Reads files using `utf-8-sig` encoding, safely stripping Byte Order Mark (BOM) signatures automatically.
-* Returns initial metadata validations throwing `InvalidSQLFileError` if files are unreadable, empty, or missing.
+## SOLID Compliance in Parser Core
 
-### 3. Dialect Detection
-* Analyzes file paths and content signatures to identify `postgresql` or `mysql` dialects.
-* Ambiguous syntax results in an `UnsupportedDialectError`.
+Aegis enforces SOLID principles to ensure the static analyzer parser remains extensible, modular, and maintainable:
 
-### 4. AST Generator
-* Leverages `sqlglot.parse` to compile raw SQL strings into lists of typed `Expression` objects.
-* Handles syntax errors by catching `ParseError` and wrapping them in `ParseFailure` results.
+### 1. Single Responsibility Principle (SRP)
+Each module in the parser package has a single focused responsibility:
+- **`discovery.py`**: Resolving directories and identifying `.sql` paths while preventing circular loops.
+- **`loader.py`**: Managing file encodings, stripping BOM bytes, and validating that the file contains executable content.
+- **`detector.py`**: Scanning content signatures and directory path hints to match targeted SQL dialects.
+- **`core.py`**: Orchestrating the parsing operations and running `sqlglot` compilers.
+
+### 2. Open/Closed Principle (OCP)
+The parser system is designed to allow extensions without modifying existing logic. The parser returns a list of generic `sqlglot` `Expression` AST nodes. When new SQL dialects are supported, we can extend `SQLDialect` and add detection heuristics without modifying the core `SqlParser` loop.
+
+### 3. Liskov Substitution Principle (LSP)
+The `SqlParser` realizes the `BaseParser` interface contract. Any subsystem requiring parsing relies on the `BaseParser` type, permitting the introduction of mock parsers or alternative SQL compilers without modifying consumer modules.
+
+### 4. Interface Segregation Principle (ISP)
+The `BaseParser` interface enforces only a single abstract signature: `parse(file_path: Path) -> ParseResult`. Clients are not forced to depend on directory traversal or caching options if they only require single-file compilation.
+
+### 5. Dependency Inversion Principle (DIP)
+High-level analyzer rules will depend on the `BaseParser` abstraction, rather than coupling directly to concrete `SqlParser` implementation details.
 
 ---
 
