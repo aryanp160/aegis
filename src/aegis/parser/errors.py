@@ -10,6 +10,14 @@ class InvalidSQLFileError(ParserError):
     """Raised when a SQL migration file is empty, missing, or unreadable."""
 
 
+class UnreadableFileError(InvalidSQLFileError):
+    """Raised when a SQL migration file cannot be read (missing or permission error)."""
+
+
+class EmptySQLFileError(InvalidSQLFileError):
+    """Raised when a SQL migration file contains no executable statements."""
+
+
 class UnsupportedDialectError(ParserError):
     """Raised when the detected or specified SQL dialect is not supported."""
 
