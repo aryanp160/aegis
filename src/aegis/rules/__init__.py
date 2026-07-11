@@ -10,6 +10,11 @@ from aegis.rules.high_risk import (
     UnsafeNotNullColumnAdditionRule,
 )
 from aegis.rules.models import AnalysisResult, RuleMetadata, Violation
+from aegis.rules.operational import (
+    ConcurrentlyInsideTransactionRule,
+    DropTableColumnProtectionRule,
+    MissingLockTimeoutRule,
+)
 from aegis.rules.registry import RuleRegistry
 
 __all__ = [
@@ -28,4 +33,7 @@ __all__ = [
     "UnsafeNotNullColumnAdditionRule",
     "TableRewritingTypeConversionRule",
     "ForeignKeyWithoutNotValidRule",
+    "ConcurrentlyInsideTransactionRule",
+    "DropTableColumnProtectionRule",
+    "MissingLockTimeoutRule",
 ]

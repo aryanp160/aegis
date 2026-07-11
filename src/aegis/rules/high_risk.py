@@ -242,8 +242,7 @@ AEG_104_META = RuleMetadata(
     ),
     unsafe_sql="ALTER TABLE users ALTER COLUMN age TYPE TEXT;",
     safe_sql=(
-        "-- safe alternatives: add a new column, backfill data, and drop the "
-        "old column"
+        "-- safe alternatives: add a new column, backfill data, and drop the old column"
     ),
     remediation=(
         "Use a dual-column transition strategy: add new column, backfill "
@@ -289,8 +288,7 @@ class TableRewritingTypeConversionRule(Rule):
                     Violation(
                         code=AEG_104_META.code,
                         message=(
-                            "Modifying column type is unsafe and causes table "
-                            "rewrites."
+                            "Modifying column type is unsafe and causes table rewrites."
                         ),
                         path=context.migration.path,
                         line=node.meta.get("line")
