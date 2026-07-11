@@ -13,6 +13,24 @@ class RuleMetadata(BaseModel):
     description: str = Field(description="Extended documentation of the rule's checks.")
     category: Category = Field(description="The category category of the rule.")
     severity: Severity = Field(description="Default severity rating for rule breaches.")
+    risk: str = Field(
+        description="The architectural risk or consequence of violating the rule."
+    )
+    explanation: str = Field(
+        description="Deep dive explanation of why this check is active."
+    )
+    unsafe_sql: str = Field(
+        description="Code example demonstrating an unsafe migration command."
+    )
+    safe_sql: str = Field(
+        description="Code example demonstrating the safe/preferred migration command."
+    )
+    remediation: str = Field(
+        description="Remediation steps for resolving the violation."
+    )
+    documentation_url: str = Field(
+        description="URL to extended reference documentation."
+    )
 
 
 class Violation(BaseModel):

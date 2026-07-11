@@ -28,9 +28,7 @@ class RuleRegistry:
         # Validate that the rule class has a metadata attribute with a valid code
         metadata = getattr(rule_cls, "metadata", None)
         if not metadata or not getattr(metadata, "code", None):
-            raise ValueError(
-                f"Rule class {rule_cls.__name__} lacks metadata code."
-            )
+            raise ValueError(f"Rule class {rule_cls.__name__} lacks metadata code.")
 
         code = metadata.code
         cls._rules[code] = rule_cls

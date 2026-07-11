@@ -46,6 +46,12 @@ MOCK_METADATA = RuleMetadata(
     description="Fires a warning on any alter statements.",
     category=Category.STYLE,
     severity=Severity.WARNING,
+    risk="Low risk.",
+    explanation="Test mock explanation.",
+    unsafe_sql="ALTER TABLE x DROP y;",
+    safe_sql="-- safe sql mock",
+    remediation="Do not run alter.",
+    documentation_url="https://aegis.dev/mock",
 )
 
 
