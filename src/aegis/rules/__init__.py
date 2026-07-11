@@ -1,4 +1,8 @@
 from aegis.rules.base import ASTVisitor, Rule
+from aegis.rules.best_practices import (
+    SerialUsageRule,
+    TimestampWithoutTimeZoneRule,
+)
 from aegis.rules.context import RuleContext
 from aegis.rules.engine import RuleEngine
 from aegis.rules.enums import Category, Severity
@@ -36,4 +40,6 @@ __all__ = [
     "ConcurrentlyInsideTransactionRule",
     "DropTableColumnProtectionRule",
     "MissingLockTimeoutRule",
+    "SerialUsageRule",
+    "TimestampWithoutTimeZoneRule",
 ]

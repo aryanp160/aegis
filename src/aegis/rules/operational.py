@@ -217,8 +217,7 @@ class MissingLockTimeoutRule(Rule):
                 Violation(
                     code=self.metadata.code,
                     message=(
-                        "Missing 'SET lock_timeout' statement in PostgreSQL "
-                        "migration."
+                        "Missing 'SET lock_timeout' statement in PostgreSQL migration."
                     ),
                     path=context.migration.path,
                     line=None,
