@@ -7,6 +7,7 @@ import sqlglot
 from sqlglot import exp
 from sqlglot.expressions import Expression
 
+from aegis.engine import RuleEngine
 from aegis.parser.enums import SQLDialect
 from aegis.parser.models import ParsedMigration
 from aegis.rules import (
@@ -20,7 +21,6 @@ from aegis.rules import (
     Severity,
     Violation,
 )
-from aegis.engine import RuleEngine
 
 
 class MockVisitor(ASTVisitor):
