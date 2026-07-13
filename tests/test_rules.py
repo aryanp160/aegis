@@ -104,7 +104,8 @@ def test_severity_and_category_values() -> None:
 
 
 def test_rule_registry_invalid_registration() -> None:
-    """Verifies that invalid rule classes trigger ValueError on registration."""
+    """Verifies that invalid rule classes trigger ValueError on
+    registration."""
 
     # Missing metadata
     class BadRuleNoMeta(Rule):
@@ -116,7 +117,8 @@ def test_rule_registry_invalid_registration() -> None:
 
 
 def test_ast_visitor_routing() -> None:
-    """Verifies that the ASTVisitor correctly traverses nodes and routes callbacks."""
+    """Verifies that the ASTVisitor correctly traverses nodes and routes
+    callbacks."""
     sql = "CREATE TABLE users (id INT); ALTER TABLE users ADD COLUMN age INT;"
     nodes = [node for node in sqlglot.parse(sql, read="postgres") if node is not None]
 
@@ -129,7 +131,8 @@ def test_ast_visitor_routing() -> None:
 
 
 def test_rule_engine_analysis() -> None:
-    """Verifies that the RuleEngine analyzes ParsedMigrations and aggregates results."""
+    """Verifies that the RuleEngine analyzes ParsedMigrations and aggregates
+    results."""
     # Mock ParsedMigration containing Alter statement
     migration = ParsedMigration(
         path=Path("migration.sql"),

@@ -65,12 +65,16 @@ class SerialUsageRule(Rule):
                             code=AEG_108_META.code,
                             message=f"Discouraged data type '{node.this}' detected.",
                             path=context.migration.path,
-                            line=node.meta.get("line")
-                            if hasattr(node, "meta") and node.meta
-                            else None,
-                            column=node.meta.get("column")
-                            if hasattr(node, "meta") and node.meta
-                            else None,
+                            line=(
+                                node.meta.get("line")
+                                if hasattr(node, "meta") and node.meta
+                                else None
+                            ),
+                            column=(
+                                node.meta.get("column")
+                                if hasattr(node, "meta") and node.meta
+                                else None
+                            ),
                             severity=AEG_108_META.severity,
                         )
                     )
@@ -132,12 +136,16 @@ class TimestampWithoutTimeZoneRule(Rule):
                                 "TIMESTAMPTZ."
                             ),
                             path=context.migration.path,
-                            line=node.meta.get("line")
-                            if hasattr(node, "meta") and node.meta
-                            else None,
-                            column=node.meta.get("column")
-                            if hasattr(node, "meta") and node.meta
-                            else None,
+                            line=(
+                                node.meta.get("line")
+                                if hasattr(node, "meta") and node.meta
+                                else None
+                            ),
+                            column=(
+                                node.meta.get("column")
+                                if hasattr(node, "meta") and node.meta
+                                else None
+                            ),
                             severity=AEG_110_META.severity,
                         )
                     )

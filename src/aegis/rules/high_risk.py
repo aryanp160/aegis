@@ -62,12 +62,16 @@ class MissingConcurrentlyCreateIndexRule(Rule):
                                 "CONCURRENTLY modifier."
                             ),
                             path=context.migration.path,
-                            line=node.meta.get("line")
-                            if hasattr(node, "meta") and node.meta
-                            else None,
-                            column=node.meta.get("column")
-                            if hasattr(node, "meta") and node.meta
-                            else None,
+                            line=(
+                                node.meta.get("line")
+                                if hasattr(node, "meta") and node.meta
+                                else None
+                            ),
+                            column=(
+                                node.meta.get("column")
+                                if hasattr(node, "meta") and node.meta
+                                else None
+                            ),
                             severity=self.metadata.severity,
                         )
                     )
@@ -123,12 +127,16 @@ class MissingConcurrentlyDropIndexRule(Rule):
                                 "CONCURRENTLY modifier."
                             ),
                             path=context.migration.path,
-                            line=node.meta.get("line")
-                            if hasattr(node, "meta") and node.meta
-                            else None,
-                            column=node.meta.get("column")
-                            if hasattr(node, "meta") and node.meta
-                            else None,
+                            line=(
+                                node.meta.get("line")
+                                if hasattr(node, "meta") and node.meta
+                                else None
+                            ),
+                            column=(
+                                node.meta.get("column")
+                                if hasattr(node, "meta") and node.meta
+                                else None
+                            ),
                             severity=self.metadata.severity,
                         )
                     )
@@ -203,12 +211,16 @@ class UnsafeNotNullColumnAdditionRule(Rule):
                                     "value is unsafe."
                                 ),
                                 path=context.migration.path,
-                                line=node.meta.get("line")
-                                if hasattr(node, "meta") and node.meta
-                                else None,
-                                column=node.meta.get("column")
-                                if hasattr(node, "meta") and node.meta
-                                else None,
+                                line=(
+                                    node.meta.get("line")
+                                    if hasattr(node, "meta") and node.meta
+                                    else None
+                                ),
+                                column=(
+                                    node.meta.get("column")
+                                    if hasattr(node, "meta") and node.meta
+                                    else None
+                                ),
                                 severity=AEG_103_META.severity,
                             )
                         )
@@ -272,12 +284,16 @@ class TableRewritingTypeConversionRule(Rule):
                                 "causes table rewrites."
                             ),
                             path=context.migration.path,
-                            line=node.meta.get("line")
-                            if hasattr(node, "meta") and node.meta
-                            else None,
-                            column=node.meta.get("column")
-                            if hasattr(node, "meta") and node.meta
-                            else None,
+                            line=(
+                                node.meta.get("line")
+                                if hasattr(node, "meta") and node.meta
+                                else None
+                            ),
+                            column=(
+                                node.meta.get("column")
+                                if hasattr(node, "meta") and node.meta
+                                else None
+                            ),
                             severity=AEG_104_META.severity,
                         )
                     )
@@ -291,12 +307,16 @@ class TableRewritingTypeConversionRule(Rule):
                             "Modifying column type is unsafe and causes table rewrites."
                         ),
                         path=context.migration.path,
-                        line=node.meta.get("line")
-                        if hasattr(node, "meta") and node.meta
-                        else None,
-                        column=node.meta.get("column")
-                        if hasattr(node, "meta") and node.meta
-                        else None,
+                        line=(
+                            node.meta.get("line")
+                            if hasattr(node, "meta") and node.meta
+                            else None
+                        ),
+                        column=(
+                            node.meta.get("column")
+                            if hasattr(node, "meta") and node.meta
+                            else None
+                        ),
                         severity=AEG_104_META.severity,
                     )
                 )
@@ -375,12 +395,16 @@ class ForeignKeyWithoutNotValidRule(Rule):
                             code=AEG_105_META.code,
                             message="Adding a foreign key without NOT VALID is unsafe.",
                             path=context.migration.path,
-                            line=node.meta.get("line")
-                            if hasattr(node, "meta") and node.meta
-                            else None,
-                            column=node.meta.get("column")
-                            if hasattr(node, "meta") and node.meta
-                            else None,
+                            line=(
+                                node.meta.get("line")
+                                if hasattr(node, "meta") and node.meta
+                                else None
+                            ),
+                            column=(
+                                node.meta.get("column")
+                                if hasattr(node, "meta") and node.meta
+                                else None
+                            ),
                             severity=AEG_105_META.severity,
                         )
                     )

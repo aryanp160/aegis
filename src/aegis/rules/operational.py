@@ -81,12 +81,16 @@ class ConcurrentlyInsideTransactionRule(Rule):
                         "transaction block."
                     ),
                     path=context.migration.path,
-                    line=target_node.meta.get("line")
-                    if hasattr(target_node, "meta") and target_node.meta
-                    else None,
-                    column=target_node.meta.get("column")
-                    if hasattr(target_node, "meta") and target_node.meta
-                    else None,
+                    line=(
+                        target_node.meta.get("line")
+                        if hasattr(target_node, "meta") and target_node.meta
+                        else None
+                    ),
+                    column=(
+                        target_node.meta.get("column")
+                        if hasattr(target_node, "meta") and target_node.meta
+                        else None
+                    ),
                     severity=self.metadata.severity,
                 )
             )
@@ -141,12 +145,16 @@ class DropTableColumnProtectionRule(Rule):
                             code=AEG_107_META.code,
                             message=f"Destructive DROP {kind} statement detected.",
                             path=context.migration.path,
-                            line=node.meta.get("line")
-                            if hasattr(node, "meta") and node.meta
-                            else None,
-                            column=node.meta.get("column")
-                            if hasattr(node, "meta") and node.meta
-                            else None,
+                            line=(
+                                node.meta.get("line")
+                                if hasattr(node, "meta") and node.meta
+                                else None
+                            ),
+                            column=(
+                                node.meta.get("column")
+                                if hasattr(node, "meta") and node.meta
+                                else None
+                            ),
                             severity=AEG_107_META.severity,
                         )
                     )
