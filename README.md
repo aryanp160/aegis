@@ -94,31 +94,49 @@ if not result.success:
         print(error)
 ```
 
+#### 3. Rule Engine Analysis
+Once a migration is parsed, you can evaluate it against Aegis's core static analysis rules to identify potentially unsafe operations.
+
+```python
+from pathlib import Path
+from aegis import RuleEngine, RuleRegistry
+from aegis.parser import SqlParser
+
+# Parse migration
+parser = SqlParser()
+result = parser.parse(Path("examples/postgres/0001_init.sql"))
+
+if result.success and result.migration:
+    engine = RuleEngine()
+    analysis = engine.analyze([result.migration])
+    
+    print(f"Discovered {len(analysis.violations)} violations in {analysis.duration_ms:.2f}ms")
+    for violation in analysis.violations:
+        print(f"[{violation.severity.upper()}] {violation.code} on line {violation.line}: {violation.message}")
+```
+
 ---
 
 ## ⚡ Performance Benchmarks
-To run performance latency and throughput benchmarks for the SQL Parser core:
+To run performance latency and throughput benchmarks for the SQL Parser core and Rule Engine:
 ```bash
 python benchmarks/benchmark_parser.py
+python scripts/benchmark_engine.py
 ```
 
 ---
 
 ## 🗺️ Roadmap
 
-* **v0.2.0-alpha.1** (Completed):
-  - Structured SQL parser package core with `StrEnum` dialects and Pydantic models.
-  - Recursion discovery, BOM-stripping loader, and path-keyword heuristic dialect detectors.
-  - Fully integrated `sqlglot` AST compilers and statements formatting generators.
 * **v0.2.0-alpha.2** (Completed):
-  - Added granular exceptions (`EmptySQLFileError`, `UnreadableFileError`).
-  - Added line and column diagnostic compilation on SQL syntax errors.
-  - Optimized file scanner traversing folders without redundant resolution checks.
-  - Added optional AST caching to improve parsing latency.
-* **v0.3.0-alpha.1** (Next Milestone):
+  - Granular exceptions (`EmptySQLFileError`, `UnreadableFileError`).
+  - AST caching to improve parsing latency.
+* **v0.3.0-alpha.1** (Completed):
   - Setup core static analyzer Rule Engine and severity mapping.
-  - Implement rules checking for destructive database schema modifications: AEG-101 (`DROP TABLE`), AEG-102 (`DROP COLUMN`), etc.
-* **v0.4.0-beta.1**:
+  - Extensible `ASTVisitor` pattern for custom rule authoring.
+  - Deterministic evaluation sorting.
+  - Fully documented rules (`docs/rules/`).
+* **v0.4.0-beta.1** (Next Milestone):
   - Deliver command-line commands `aegis lint` and `aegis explain` rendering diagnostics using `rich`.
 
 ---

@@ -94,7 +94,8 @@ def test_discover_migration_files_filters(tmp_path: Path) -> None:
 
 
 def test_discover_migration_files_invalid_path() -> None:
-    """Verifies discovery raises FileDiscoveryError on invalid/missing directories."""
+    """Verifies discovery raises FileDiscoveryError on invalid/missing
+    directories."""
     with pytest.raises(FileDiscoveryError):
         discover_migration_files(Path("/non_existent_directory_aegis"))
 
@@ -186,7 +187,8 @@ def test_detect_dialect_by_content() -> None:
 
 
 def test_detect_dialect_ambiguous_raises_error() -> None:
-    """Verifies that highly mixed keyword content triggers UnsupportedDialectError."""
+    """Verifies that highly mixed keyword content triggers
+    UnsupportedDialectError."""
     mixed_sql = "CREATE TABLE users (id SERIAL, count INT AUTO_INCREMENT);"
     with pytest.raises(UnsupportedDialectError) as exc_info:
         detect_dialect(mixed_sql)
@@ -194,7 +196,8 @@ def test_detect_dialect_ambiguous_raises_error() -> None:
 
 
 def test_sql_parser_postgres_success(tmp_path: Path) -> None:
-    """Verifies parsing Postgres migrations extracts statements and builds AST nodes."""
+    """Verifies parsing Postgres migrations extracts statements and builds AST
+    nodes."""
     migration_file = tmp_path / "postgres_0001.sql"
     sql_content = """
     CREATE TABLE users (id SERIAL PRIMARY KEY);
@@ -215,7 +218,8 @@ def test_sql_parser_postgres_success(tmp_path: Path) -> None:
 
 
 def test_sql_parser_mysql_success(tmp_path: Path) -> None:
-    """Verifies parsing MySQL migrations extracts statements and engine properties."""
+    """Verifies parsing MySQL migrations extracts statements and engine
+    properties."""
     migration_file = tmp_path / "mysql_0001.sql"
     sql_content = "CREATE TABLE `users` (id INT AUTO_INCREMENT) ENGINE=InnoDB;"
     migration_file.write_text(sql_content, encoding="utf-8")
