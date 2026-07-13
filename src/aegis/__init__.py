@@ -1,3 +1,13 @@
 """Aegis: A Python SQL migration static analyzer."""
 
-__version__ = "0.1.0-alpha.1"
+from aegis.engine import RuleEngine
+from aegis.parser.models import ParsedMigration
+from aegis.rules.registry import RuleRegistry
+
+__version__ = "0.3.0-alpha.1"
+
+__all__ = [
+    "ParsedMigration",
+    "RuleEngine",
+    "RuleRegistry",
+]

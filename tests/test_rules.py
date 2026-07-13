@@ -15,12 +15,12 @@ from aegis.rules import (
     Category,
     Rule,
     RuleContext,
-    RuleEngine,
     RuleMetadata,
     RuleRegistry,
     Severity,
     Violation,
 )
+from aegis.engine import RuleEngine
 
 
 class MockVisitor(ASTVisitor):

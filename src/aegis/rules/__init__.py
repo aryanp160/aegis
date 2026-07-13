@@ -4,7 +4,6 @@ from aegis.rules.best_practices import (
     TimestampWithoutTimeZoneRule,
 )
 from aegis.rules.context import RuleContext
-from aegis.rules.engine import RuleEngine
 from aegis.rules.enums import Category, Severity
 from aegis.rules.high_risk import (
     ForeignKeyWithoutNotValidRule,
@@ -31,7 +30,6 @@ __all__ = [
     "ASTVisitor",
     "Rule",
     "RuleRegistry",
-    "RuleEngine",
     "MissingConcurrentlyCreateIndexRule",
     "MissingConcurrentlyDropIndexRule",
     "UnsafeNotNullColumnAdditionRule",

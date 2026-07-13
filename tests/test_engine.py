@@ -3,11 +3,11 @@ from pathlib import Path
 
 import pytest
 
+from aegis.engine import RuleEngine
 from aegis.parser.enums import SQLDialect
 from aegis.parser.models import ParsedMigration
 from aegis.rules.base import Rule
 from aegis.rules.context import RuleContext
-from aegis.rules.engine import RuleEngine
 from aegis.rules.enums import Category, Severity
 from aegis.rules.models import RuleMetadata, Violation
 from aegis.rules.registry import RuleRegistry

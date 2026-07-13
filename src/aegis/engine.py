@@ -9,7 +9,7 @@ from aegis.rules.enums import Severity
 from aegis.rules.models import AnalysisResult, Violation
 from aegis.rules.registry import RuleRegistry
 
-logger = logging.getLogger("aegis.rules.engine")
+logger = logging.getLogger("aegis.engine")
 
 
 class RuleEngine:

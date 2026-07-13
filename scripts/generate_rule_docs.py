@@ -1,10 +1,9 @@
-import os
 from pathlib import Path
 
 # Need to import rules modules so they register themselves
-import aegis.rules.best_practices
-import aegis.rules.high_risk
-import aegis.rules.operational
+import aegis.rules.best_practices  # noqa: F401
+import aegis.rules.high_risk  # noqa: F401
+import aegis.rules.operational  # noqa: F401
 from aegis.rules.registry import RuleRegistry
 
 DOCS_DIR = Path("docs/rules")
@@ -44,6 +43,7 @@ TEMPLATE = """# {code}: {name}
 - [Documentation]({documentation_url})
 """
 
+
 def main() -> None:
     DOCS_DIR.mkdir(parents=True, exist_ok=True)
 
@@ -52,7 +52,7 @@ def main() -> None:
 
     for rule_cls in rules:
         meta = rule_cls.metadata
-        
+
         content = TEMPLATE.format(
             code=meta.code,
             name=meta.name,
@@ -70,8 +70,9 @@ def main() -> None:
         file_path = DOCS_DIR / f"{meta.code}.md"
         with open(file_path, "w", encoding="utf-8") as f:
             f.write(content)
-        
+
         print(f"Generated {file_path}")
+
 
 if __name__ == "__main__":
     main()
