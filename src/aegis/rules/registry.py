@@ -130,6 +130,30 @@ class RuleRegistry:
         return stats
 
     @classmethod
+    def apply_config(cls, config: Any) -> None:
+        """Applies configuration settings to configure rule enable/disable states.
+
+        Args:
+            config: An AegisConfig instance to apply to the registry.
+        """
+        # Reset disabled rules first
+        cls._disabled_rules.clear()
+
+        # Apply global ignore list
+        if hasattr(config, "ignore_rules"):
+            for code in config.ignore_rules:
+                cls.disable_rule(code)
+
+        # Apply individual rule overrides
+        if hasattr(config, "rules") and hasattr(config.rules, "get_overrides"):
+            overrides = config.rules.get_overrides()
+            for code, override in overrides.items():
+                if not override.enabled:
+                    cls.disable_rule(code)
+                else:
+                    cls.enable_rule(code)
+
+    @classmethod
     def load_plugins(cls, paths: list[str]) -> None:
         """Stubs the entrypoint for loading external plugin rules dynamically.
 

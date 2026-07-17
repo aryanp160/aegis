@@ -116,3 +116,38 @@ A `Violation` requires context bridging the abstract syntax issue back to the ph
 - `severity`: The configured severity for the rule execution.
 
 Violations across all migrations and all rules are aggregated by the `RuleEngine`, which sorts them deterministically by severity and path before generating the final `AnalysisResult`.
+
+## Rule Suppression and Configuration
+
+Aegis supports extensive custom configurations via a standalone `aegis.toml` file (or a `[tool.aegis]` table inside `pyproject.toml`).
+
+### Global Rule Ignore List
+You can completely disable specific rules across your entire codebase using the `ignore_rules` list:
+
+```toml
+ignore_rules = [
+    "AEG-101",
+    "AEG-110"
+]
+```
+
+### Per-Rule Configuration
+You can enable/disable rules individually or override their severity levels using the `[rules]` table:
+
+```toml
+[rules."AEG-101"]
+enabled = false
+
+[rules."AEG-102"]
+severity = "warning"  # Options: error, warning, info
+```
+
+### Per-File Suppression
+You can suppress specific rules from firing on certain files or directory pattern globs under the `[suppressions]` table:
+
+```toml
+[suppressions]
+"migrations/0001_initial.sql" = ["AEG-101", "AEG-108"]
+"legacy/*.sql" = ["AEG-110"]
+```
+

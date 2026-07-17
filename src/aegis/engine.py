@@ -74,6 +74,9 @@ class RuleEngine:
         start_time = time.perf_counter()
         violations: list[Violation] = []
 
+        if config is not None:
+            RuleRegistry.apply_config(config)
+
         rules = RuleRegistry.get_rules()
         logger.info("Executing rule engine analysis with %d active rules.", len(rules))
 
@@ -91,7 +94,40 @@ class RuleEngine:
             migration_violations = self._analyze_migration(
                 migration, rule_instances, config
             )
-            violations.extend(migration_violations)
+
+            # Post-process violations based on configuration
+            for violation in migration_violations:
+                # 1. Apply severity overrides
+                if (
+                    config is not None
+                    and hasattr(config, "rules")
+                    and hasattr(config.rules, "get_overrides")
+                ):
+                    overrides = config.rules.get_overrides()
+                    if violation.code in overrides:
+                        override = overrides[violation.code]
+                        if override.severity is not None:
+                            violation.severity = override.severity
+
+                # 2. Apply per-file suppressions
+                suppressed = False
+                if config is not None and hasattr(config, "suppressions"):
+                    import fnmatch
+
+                    for pattern, ignored_codes in config.suppressions.items():
+                        path_str = violation.path.as_posix()
+                        name_str = violation.path.name
+                        if (
+                            fnmatch.fnmatch(path_str, pattern)
+                            or fnmatch.fnmatch(name_str, pattern)
+                            or fnmatch.fnmatch(str(violation.path), pattern)
+                        ):
+                            if violation.code in ignored_codes:
+                                suppressed = True
+                                break
+
+                if not suppressed:
+                    violations.append(violation)
 
         # Sort violations deterministically
         violations.sort(
