@@ -67,9 +67,7 @@ class Violation(BaseModel):
     highlighted_sql: str | None = Field(
         default=None, description="Visually pointed SQL segment."
     )
-    risk: str | None = Field(
-        default=None, description="Detailed explanation of risk."
-    )
+    risk: str | None = Field(default=None, description="Detailed explanation of risk.")
     remediation: str | None = Field(
         default=None, description="Remediation instructions."
     )
