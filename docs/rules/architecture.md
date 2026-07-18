@@ -114,6 +114,15 @@ A `Violation` requires context bridging the abstract syntax issue back to the ph
 - `path`: The file path from `context.migration.path`.
 - `line` & `column`: Extracted from the `sqlglot` AST node properties if available.
 - `severity`: The configured severity for the rule execution.
+- `title`: Short human-readable name of the rule.
+- `category`: The category classification of the rule.
+- `sql_snippet`: Raw SQL statement compiled from the offending AST node.
+- `highlighted_sql`: Format-ready SQL line containing visual carets pointing to the exact violation location.
+- `risk`: Architectural consequence or risk explanation.
+- `remediation`: Guidance or safe alternative to fix the violation.
+- `documentation_url`: Link to the online rule documentation reference.
+
+Violations can be rendered as a beautiful multi-line terminal diagnostic block using the `violation.render()` method (which is also the default string representation).
 
 Violations across all migrations and all rules are aggregated by the `RuleEngine`, which sorts them deterministically by severity and path before generating the final `AnalysisResult`.
 

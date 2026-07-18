@@ -73,6 +73,7 @@ class MissingConcurrentlyCreateIndexRule(Rule):
                                 else None
                             ),
                             severity=self.metadata.severity,
+                            node=node,
                         )
                     )
         return violations
@@ -138,6 +139,7 @@ class MissingConcurrentlyDropIndexRule(Rule):
                                 else None
                             ),
                             severity=self.metadata.severity,
+                            node=node,
                         )
                     )
         return violations
@@ -222,6 +224,7 @@ class UnsafeNotNullColumnAdditionRule(Rule):
                                     else None
                                 ),
                                 severity=AEG_103_META.severity,
+                                node=node,
                             )
                         )
                 self.generic_visit(node)
@@ -295,6 +298,7 @@ class TableRewritingTypeConversionRule(Rule):
                                 else None
                             ),
                             severity=AEG_104_META.severity,
+                            node=node,
                         )
                     )
                 self.generic_visit(node)
@@ -318,6 +322,7 @@ class TableRewritingTypeConversionRule(Rule):
                             else None
                         ),
                         severity=AEG_104_META.severity,
+                        node=node,
                     )
                 )
                 self.generic_visit(node)
@@ -406,6 +411,7 @@ class ForeignKeyWithoutNotValidRule(Rule):
                                 else None
                             ),
                             severity=AEG_105_META.severity,
+                            node=node,
                         )
                     )
                 self.generic_visit(node)

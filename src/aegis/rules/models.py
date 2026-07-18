@@ -1,6 +1,7 @@
 from pathlib import Path
+from typing import Any
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 from aegis.rules.enums import Category, Severity
 
@@ -36,6 +37,8 @@ class RuleMetadata(BaseModel):
 class Violation(BaseModel):
     """Pydantic model mapping a specific rule violation in a SQL script."""
 
+    model_config = ConfigDict(arbitrary_types_allowed=True)
+
     code: str = Field(description="Identifies the violated rule.")
     message: str = Field(
         description="Descriptive diagnostic details explaining the breach."
@@ -52,6 +55,50 @@ class Violation(BaseModel):
     severity: Severity = Field(
         description="Severity rating of this specific violation."
     )
+
+    # Rich Diagnostics
+    title: str | None = Field(
+        default=None, description="Short human-readable rule name."
+    )
+    category: Category | None = Field(default=None, description="Rule category.")
+    sql_snippet: str | None = Field(
+        default=None, description="Violating SQL statement."
+    )
+    highlighted_sql: str | None = Field(
+        default=None, description="Visually pointed SQL segment."
+    )
+    risk: str | None = Field(
+        default=None, description="Detailed explanation of risk."
+    )
+    remediation: str | None = Field(
+        default=None, description="Remediation instructions."
+    )
+    documentation_url: str | None = Field(
+        default=None, description="Link to reference page."
+    )
+
+    # Excluded AST node reference for post-processing
+    node: Any = Field(default=None, exclude=True)
+
+    def render(self) -> str:
+        """Renders a detailed, beautiful diagnostic block for this violation."""
+        lines = [
+            f"[{self.severity.value.upper()}] {self.code}: {self.title or ''}",
+            f"Category:  {self.category.value.title() if self.category else ''}",
+            f"File:      {self.path}:{self.line or ''}:{self.column or ''}",
+            f"Risk:      {self.risk or ''}",
+            f"Fix:       {self.remediation or ''}",
+            f"Docs:      {self.documentation_url or ''}",
+        ]
+        if self.highlighted_sql:
+            lines.append("\nHighlighted SQL:")
+            lines.append(self.highlighted_sql)
+        elif self.sql_snippet:
+            lines.append(f"\nSQL Snippet:\n    {self.sql_snippet}")
+        return "\n".join(lines)
+
+    def __str__(self) -> str:
+        return self.render()
 
 
 class AnalysisResult(BaseModel):

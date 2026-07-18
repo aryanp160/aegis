@@ -76,6 +76,7 @@ class SerialUsageRule(Rule):
                                 else None
                             ),
                             severity=AEG_108_META.severity,
+                            node=node,
                         )
                     )
                 self.generic_visit(node)
@@ -147,6 +148,7 @@ class TimestampWithoutTimeZoneRule(Rule):
                                 else None
                             ),
                             severity=AEG_110_META.severity,
+                            node=node,
                         )
                     )
                 self.generic_visit(node)

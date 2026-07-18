@@ -92,6 +92,7 @@ class ConcurrentlyInsideTransactionRule(Rule):
                         else None
                     ),
                     severity=self.metadata.severity,
+                    node=target_node,
                 )
             )
 
@@ -156,6 +157,7 @@ class DropTableColumnProtectionRule(Rule):
                                 else None
                             ),
                             severity=AEG_107_META.severity,
+                            node=node,
                         )
                     )
                 self.generic_visit(node)

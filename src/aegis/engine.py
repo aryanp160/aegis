@@ -88,6 +88,10 @@ class RuleEngine:
             except Exception as e:
                 logger.error("Failed to instantiate rule %s: %s", rule_cls.__name__, e)
 
+        # Create a mapping from rule code to rule instances
+        rule_map = {rule.metadata.code: rule for rule in rule_instances}
+        from aegis.parser.enums import SQLDialect
+
         # Run each migration against each rule instance
         # Designed to be easily wrapped in a ProcessPoolExecutor in the future
         for migration in migrations:
@@ -97,6 +101,65 @@ class RuleEngine:
 
             # Post-process violations based on configuration
             for violation in migration_violations:
+                # 0. Enrich violation with metadata and formatting details
+                rule = rule_map.get(violation.code)
+                if rule is not None:
+                    violation.title = rule.metadata.name
+                    violation.category = rule.metadata.category
+                    violation.risk = rule.metadata.risk
+                    violation.remediation = rule.metadata.remediation
+                    violation.documentation_url = rule.metadata.documentation_url
+
+                    # Extract SQL snippet using AST node
+                    is_pg = migration.dialect == SQLDialect.POSTGRESQL
+                    dialect_name = "postgres" if is_pg else "mysql"
+                    if violation.node is not None:
+                        try:
+                            curr = violation.node
+                            while curr.parent is not None:
+                                curr = curr.parent
+                            violation.sql_snippet = curr.sql(dialect=dialect_name)
+                        except Exception as e:
+                            logger.debug("Failed to compile SQL snippet: %s", e)
+
+                    if (
+                        not violation.sql_snippet
+                        and migration.raw_content
+                        and violation.line is not None
+                    ):
+                        lines = migration.raw_content.splitlines()
+                        if 0 < violation.line <= len(lines):
+                            violation.sql_snippet = lines[violation.line - 1].strip()
+
+                    # Generate highlighted SQL
+                    if migration.raw_content and violation.line is not None:
+                        lines = migration.raw_content.splitlines()
+                        if 0 < violation.line <= len(lines):
+                            offending_line = lines[violation.line - 1]
+                            col = (
+                                violation.column
+                                if violation.column is not None
+                                else 0
+                            )
+
+                            # Determine highlight length
+                            width = 1
+                            if violation.node is not None:
+                                try:
+                                    node_sql = violation.node.sql(
+                                        dialect=dialect_name
+                                    )
+                                    width = len(node_sql)
+                                except Exception:
+                                    pass
+
+                            carets = "^" * max(1, width)
+                            padding = " " * col
+                            violation.highlighted_sql = (
+                                f"{violation.line:4d} | {offending_line}\n"
+                                f"     | {padding}{carets}"
+                            )
+
                 # 1. Apply severity overrides
                 if (
                     config is not None
