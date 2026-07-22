@@ -75,6 +75,5 @@ def test_golden_violations_match() -> None:
 
     if pytest_fail:
         pytest.fail(
-            f"Initialized new golden file at {golden_file}. "
-            "Please review and commit."
+            f"Initialized new golden file at {golden_file}. Please review and commit."
         )

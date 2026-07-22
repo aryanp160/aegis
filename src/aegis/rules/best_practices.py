@@ -153,8 +153,7 @@ class TimestampVisitor(ASTVisitor):
                 Violation(
                     code=self.code,
                     message=(
-                        "TIMESTAMP without timezone is discouraged. Use "
-                        "TIMESTAMPTZ."
+                        "TIMESTAMP without timezone is discouraged. Use TIMESTAMPTZ."
                     ),
                     path=self.path,
                     line=(

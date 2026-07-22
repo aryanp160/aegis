@@ -140,18 +140,14 @@ class RuleEngine:
                         if 0 < violation.line <= len(raw_lines):
                             offending_line = raw_lines[violation.line - 1]
                             col = (
-                                violation.column
-                                if violation.column is not None
-                                else 0
+                                violation.column if violation.column is not None else 0
                             )
 
                             # Determine highlight length
                             width = 1
                             if violation.node is not None:
                                 try:
-                                    node_sql = violation.node.sql(
-                                        dialect=dialect_name
-                                    )
+                                    node_sql = violation.node.sql(dialect=dialect_name)
                                     width = len(node_sql)
                                 except Exception:
                                     pass

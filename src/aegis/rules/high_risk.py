@@ -329,8 +329,7 @@ class TypeConversionVisitor(ASTVisitor):
                 Violation(
                     code=self.code,
                     message=(
-                        "Altering column data type is unsafe and "
-                        "causes table rewrites."
+                        "Altering column data type is unsafe and causes table rewrites."
                     ),
                     path=self.path,
                     line=(
@@ -353,9 +352,7 @@ class TypeConversionVisitor(ASTVisitor):
         self.violations.append(
             Violation(
                 code=self.code,
-                message=(
-                    "Modifying column type is unsafe and causes table rewrites."
-                ),
+                message=("Modifying column type is unsafe and causes table rewrites."),
                 path=self.path,
                 line=(
                     node.meta.get("line")

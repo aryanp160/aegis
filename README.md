@@ -136,8 +136,15 @@ python scripts/benchmark_engine.py
   - Extensible `ASTVisitor` pattern for custom rule authoring.
   - Deterministic evaluation sorting.
   - Fully documented rules (`docs/rules/`).
+* **v0.3.0-alpha.2** (Completed):
+  - Rule suppression using `aegis.toml` config file.
+  - Per-rule/per-file overrides and severity customization.
+  - Rich visual terminal diagnostics with caret SQL syntax pointing.
+  - Enhanced PostgreSQL rule coverage and Golden SQL test suite.
+  - Engine execution and AST visitor caching optimizations.
 * **v0.4.0-beta.1** (Next Milestone):
-  - Deliver command-line commands `aegis lint` and `aegis explain` rendering diagnostics using `rich`.
+  - Deliver command-line commands `aegis lint` and `aegis explain` rendering diagnostics using `rich` console formatting.
+  - Introduce production-ready CLI.
 
 ---
 
