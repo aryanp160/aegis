@@ -225,4 +225,3 @@ def test_aeg_105_unsafe_inline_foreign_key_reference() -> None:
     assert len(violations) == 1
     assert violations[0].code == "AEG-105"
     assert violations[0].severity == Severity.ERROR
-

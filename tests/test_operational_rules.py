@@ -146,4 +146,3 @@ def test_aeg_106_postgres_concurrently_inside_rollback_transaction() -> None:
     assert len(violations) == 1
     assert violations[0].code == "AEG-106"
     assert violations[0].severity == Severity.ERROR
-

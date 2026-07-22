@@ -38,19 +38,21 @@ def test_golden_violations_match() -> None:
     serialized_violations = []
     for v in result.violations:
         rel_path = Path(v.path).relative_to(workspace_dir).as_posix()
-        serialized_violations.append({
-            "code": v.code,
-            "message": v.message,
-            "path": rel_path,
-            "line": v.line,
-            "column": v.column,
-            "severity": v.severity.value,
-            "title": v.title,
-            "category": v.category.value if v.category else None,
-            "risk": v.risk,
-            "remediation": v.remediation,
-            "documentation_url": v.documentation_url,
-        })
+        serialized_violations.append(
+            {
+                "code": v.code,
+                "message": v.message,
+                "path": rel_path,
+                "line": v.line,
+                "column": v.column,
+                "severity": v.severity.value,
+                "title": v.title,
+                "category": v.category.value if v.category else None,
+                "risk": v.risk,
+                "remediation": v.remediation,
+                "documentation_url": v.documentation_url,
+            }
+        )
 
     # If golden file doesn't exist, we can write it (useful for initializing the test)
     if not golden_file.is_file():
