@@ -58,8 +58,8 @@ class ConcurrentlyInsideTransactionRule(Rule):
         target_node: exp.Expression | None = None
 
         for node in context.migration.ast_nodes:
-            # Check for transaction statements (BEGIN, START TRANSACTION, COMMIT)
-            if isinstance(node, (exp.Transaction, exp.Commit)):
+            # Check for transaction statements (BEGIN, COMMIT, ROLLBACK, etc.)
+            if isinstance(node, (exp.Transaction, exp.Commit, exp.Rollback)):
                 has_transaction_stmt = True
 
             # Check for concurrently create/drop index

@@ -229,6 +229,29 @@ class UnsafeNotNullColumnAdditionRule(Rule):
                         )
                 self.generic_visit(node)
 
+            def visit_altercolumn(self, node: exp.AlterColumn) -> None:
+                if node.args.get("allow_null") is False:
+                    violations.append(
+                        Violation(
+                            code=AEG_103_META.code,
+                            message="Setting an existing column to NOT NULL is unsafe.",
+                            path=context.migration.path,
+                            line=(
+                                node.meta.get("line")
+                                if hasattr(node, "meta") and node.meta
+                                else None
+                            ),
+                            column=(
+                                node.meta.get("column")
+                                if hasattr(node, "meta") and node.meta
+                                else None
+                            ),
+                            severity=AEG_103_META.severity,
+                            node=node,
+                        )
+                    )
+                self.generic_visit(node)
+
         visitor = NotNullVisitor()
         for node in context.migration.ast_nodes:
             visitor.visit(node)
@@ -399,6 +422,55 @@ class ForeignKeyWithoutNotValidRule(Rule):
                         Violation(
                             code=AEG_105_META.code,
                             message="Adding a foreign key without NOT VALID is unsafe.",
+                            path=context.migration.path,
+                            line=(
+                                node.meta.get("line")
+                                if hasattr(node, "meta") and node.meta
+                                else None
+                            ),
+                            column=(
+                                node.meta.get("column")
+                                if hasattr(node, "meta") and node.meta
+                                else None
+                            ),
+                            severity=AEG_105_META.severity,
+                            node=node,
+                        )
+                    )
+                self.generic_visit(node)
+
+            def visit_reference(self, node: exp.Reference) -> None:
+                # If this reference is inside ForeignKey, visit_foreignkey handles it
+                p = node.parent
+                is_in_fk = False
+                while p:
+                    if isinstance(p, exp.ForeignKey):
+                        is_in_fk = True
+                        break
+                    p = p.parent
+
+                if is_in_fk:
+                    self.generic_visit(node)
+                    return
+
+                # Find the parent Alter statement
+                parent = node.parent
+                alter_node = None
+                while parent:
+                    if isinstance(parent, exp.Alter):
+                        alter_node = parent
+                        break
+                    parent = parent.parent
+
+                if alter_node:
+                    violations.append(
+                        Violation(
+                            code=AEG_105_META.code,
+                            message=(
+                                "Adding an inline foreign key reference constraint "
+                                "is unsafe. Add the column first, then add the "
+                                "constraint NOT VALID."
+                            ),
                             path=context.migration.path,
                             line=(
                                 node.meta.get("line")

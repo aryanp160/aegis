@@ -203,3 +203,26 @@ def test_aeg_105_mysql_ignored() -> None:
     violations = rule.evaluate(ctx)
 
     assert len(violations) == 0
+
+
+def test_aeg_103_unsafe_alter_column_set_not_null() -> None:
+    sql = "ALTER TABLE users ALTER COLUMN age SET NOT NULL;"
+    ctx = _make_context(sql, SQLDialect.POSTGRESQL)
+    rule = UnsafeNotNullColumnAdditionRule(UnsafeNotNullColumnAdditionRule.metadata)
+    violations = rule.evaluate(ctx)
+
+    assert len(violations) == 1
+    assert violations[0].code == "AEG-103"
+    assert violations[0].severity == Severity.ERROR
+
+
+def test_aeg_105_unsafe_inline_foreign_key_reference() -> None:
+    sql = "ALTER TABLE orders ADD COLUMN user_id INT REFERENCES users (id);"
+    ctx = _make_context(sql, SQLDialect.POSTGRESQL)
+    rule = ForeignKeyWithoutNotValidRule(ForeignKeyWithoutNotValidRule.metadata)
+    violations = rule.evaluate(ctx)
+
+    assert len(violations) == 1
+    assert violations[0].code == "AEG-105"
+    assert violations[0].severity == Severity.ERROR
+

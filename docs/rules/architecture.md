@@ -160,3 +160,11 @@ You can suppress specific rules from firing on certain files or directory patter
 "legacy/*.sql" = ["AEG-110"]
 ```
 
+## Advanced PostgreSQL Edge Cases
+
+Aegis implements robust, structural AST inspection that catches advanced edge cases beyond simple statement matching:
+- **AEG-103 (Unsafe NOT NULL column addition)**: In addition to standard `ADD COLUMN ... NOT NULL` additions on existing tables, Aegis detects `ALTER COLUMN ... SET NOT NULL` operations on existing columns which block table operations for validation scans.
+- **AEG-105 (Foreign keys without NOT VALID)**: In addition to standard foreign key constraint additions, Aegis parses inline foreign key references (`ADD COLUMN ... REFERENCES ...`) during column additions and flags them as unsafe because PostgreSQL validates them immediately without NOT VALID protection.
+- **AEG-106 (CONCURRENTLY inside transaction)**: Detects when `CONCURRENTLY` is used on index operations inside a transaction block (e.g. `BEGIN`, `COMMIT`, or `ROLLBACK`).
+
+
