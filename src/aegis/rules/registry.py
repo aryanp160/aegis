@@ -12,6 +12,7 @@ class RuleRegistry:
 
     _rules: dict[str, type[Rule]] = {}
     _disabled_rules: set[str] = set()
+    _rules_cache: dict[tuple[Any, ...], list[type[Rule]]] = {}
 
     @classmethod
     def register(cls, rule_cls: type[Rule]) -> type[Rule]:
@@ -35,6 +36,7 @@ class RuleRegistry:
 
         code = metadata.code
         cls._rules[code] = rule_cls
+        cls._rules_cache.clear()
         logger.debug("Registered static analysis rule: %s", code)
         return rule_cls
 
@@ -59,6 +61,7 @@ class RuleRegistry:
         """
         if code in cls._disabled_rules:
             cls._disabled_rules.remove(code)
+            cls._rules_cache.clear()
             logger.debug("Enabled rule: %s", code)
 
     @classmethod
@@ -70,6 +73,7 @@ class RuleRegistry:
         """
         if code in cls._rules:
             cls._disabled_rules.add(code)
+            cls._rules_cache.clear()
             logger.debug("Disabled rule: %s", code)
 
     @classmethod
@@ -89,6 +93,15 @@ class RuleRegistry:
         Returns:
             A list of registered Rule subclasses matching the criteria.
         """
+        # Create cache key
+        cache_key = (
+            tuple(categories) if categories else None,
+            tuple(severities) if severities else None,
+            include_disabled,
+        )
+        if cache_key in cls._rules_cache:
+            return cls._rules_cache[cache_key]
+
         filtered_rules = []
         for code, rule_cls in cls._rules.items():
             if not include_disabled and code in cls._disabled_rules:
@@ -103,6 +116,7 @@ class RuleRegistry:
 
             filtered_rules.append(rule_cls)
 
+        cls._rules_cache[cache_key] = filtered_rules
         return filtered_rules
 
     @classmethod
@@ -170,4 +184,5 @@ class RuleRegistry:
         """Clears all registered rules and disabled states from the registry."""
         cls._rules.clear()
         cls._disabled_rules.clear()
+        cls._rules_cache.clear()
         logger.debug("Cleared all rules from registry.")

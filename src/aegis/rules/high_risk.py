@@ -1,4 +1,5 @@
 import logging
+from pathlib import Path
 
 from sqlglot import exp
 
@@ -175,6 +176,88 @@ AEG_103_META = RuleMetadata(
 )
 
 
+class NotNullVisitor(ASTVisitor):
+    def __init__(
+        self,
+        violations: list[Violation],
+        path: Path,
+        code: str,
+        severity: Severity,
+    ) -> None:
+        super().__init__()
+        self.violations = violations
+        self.path = path
+        self.code = code
+        self.severity = severity
+
+    def visit_columndef(self, node: exp.ColumnDef) -> None:
+        # We only care about ColumnDef added inside an Alter statement
+        parent = node.parent
+        is_alter = False
+        while parent:
+            if isinstance(parent, exp.Alter):
+                is_alter = True
+                break
+            parent = parent.parent
+
+        if is_alter:
+            is_not_null = False
+            has_default = False
+            for constraint in node.find_all(exp.ColumnConstraint):
+                if isinstance(constraint.kind, exp.NotNullColumnConstraint):
+                    is_not_null = True
+                elif isinstance(constraint.kind, exp.DefaultColumnConstraint):
+                    has_default = True
+
+            if is_not_null and not has_default:
+                self.violations.append(
+                    Violation(
+                        code=self.code,
+                        message=(
+                            "Adding a NOT NULL column without a default "
+                            "value is unsafe."
+                        ),
+                        path=self.path,
+                        line=(
+                            node.meta.get("line")
+                            if hasattr(node, "meta") and node.meta
+                            else None
+                        ),
+                        column=(
+                            node.meta.get("column")
+                            if hasattr(node, "meta") and node.meta
+                            else None
+                        ),
+                        severity=self.severity,
+                        node=node,
+                    )
+                )
+        self.generic_visit(node)
+
+    def visit_altercolumn(self, node: exp.AlterColumn) -> None:
+        if node.args.get("allow_null") is False:
+            self.violations.append(
+                Violation(
+                    code=self.code,
+                    message="Setting an existing column to NOT NULL is unsafe.",
+                    path=self.path,
+                    line=(
+                        node.meta.get("line")
+                        if hasattr(node, "meta") and node.meta
+                        else None
+                    ),
+                    column=(
+                        node.meta.get("column")
+                        if hasattr(node, "meta") and node.meta
+                        else None
+                    ),
+                    severity=self.severity,
+                    node=node,
+                )
+            )
+        self.generic_visit(node)
+
+
 @RuleRegistry.register
 class UnsafeNotNullColumnAdditionRule(Rule):
     """Checks for ALTER TABLE adding NOT NULL columns without default values."""
@@ -182,77 +265,13 @@ class UnsafeNotNullColumnAdditionRule(Rule):
     metadata = AEG_103_META
 
     def evaluate(self, context: RuleContext) -> list[Violation]:
-        violations = []
-
-        class NotNullVisitor(ASTVisitor):
-            def visit_columndef(self, node: exp.ColumnDef) -> None:
-                # We only care about ColumnDef added inside an Alter statement
-                parent = node.parent
-                is_alter = False
-                while parent:
-                    if isinstance(parent, exp.Alter):
-                        is_alter = True
-                        break
-                    parent = parent.parent
-
-                if is_alter:
-                    is_not_null = False
-                    has_default = False
-                    for constraint in node.find_all(exp.ColumnConstraint):
-                        if isinstance(constraint.kind, exp.NotNullColumnConstraint):
-                            is_not_null = True
-                        elif isinstance(constraint.kind, exp.DefaultColumnConstraint):
-                            has_default = True
-
-                    if is_not_null and not has_default:
-                        violations.append(
-                            Violation(
-                                code=AEG_103_META.code,
-                                message=(
-                                    "Adding a NOT NULL column without a default "
-                                    "value is unsafe."
-                                ),
-                                path=context.migration.path,
-                                line=(
-                                    node.meta.get("line")
-                                    if hasattr(node, "meta") and node.meta
-                                    else None
-                                ),
-                                column=(
-                                    node.meta.get("column")
-                                    if hasattr(node, "meta") and node.meta
-                                    else None
-                                ),
-                                severity=AEG_103_META.severity,
-                                node=node,
-                            )
-                        )
-                self.generic_visit(node)
-
-            def visit_altercolumn(self, node: exp.AlterColumn) -> None:
-                if node.args.get("allow_null") is False:
-                    violations.append(
-                        Violation(
-                            code=AEG_103_META.code,
-                            message="Setting an existing column to NOT NULL is unsafe.",
-                            path=context.migration.path,
-                            line=(
-                                node.meta.get("line")
-                                if hasattr(node, "meta") and node.meta
-                                else None
-                            ),
-                            column=(
-                                node.meta.get("column")
-                                if hasattr(node, "meta") and node.meta
-                                else None
-                            ),
-                            severity=AEG_103_META.severity,
-                            node=node,
-                        )
-                    )
-                self.generic_visit(node)
-
-        visitor = NotNullVisitor()
+        violations: list[Violation] = []
+        visitor = NotNullVisitor(
+            violations=violations,
+            path=context.migration.path,
+            code=self.metadata.code,
+            severity=self.metadata.severity,
+        )
         for node in context.migration.ast_nodes:
             visitor.visit(node)
 
@@ -290,6 +309,71 @@ AEG_104_META = RuleMetadata(
 )
 
 
+class TypeConversionVisitor(ASTVisitor):
+    def __init__(
+        self,
+        violations: list[Violation],
+        path: Path,
+        code: str,
+        severity: Severity,
+    ) -> None:
+        super().__init__()
+        self.violations = violations
+        self.path = path
+        self.code = code
+        self.severity = severity
+
+    def visit_altercolumn(self, node: exp.AlterColumn) -> None:
+        if node.args.get("dtype"):
+            self.violations.append(
+                Violation(
+                    code=self.code,
+                    message=(
+                        "Altering column data type is unsafe and "
+                        "causes table rewrites."
+                    ),
+                    path=self.path,
+                    line=(
+                        node.meta.get("line")
+                        if hasattr(node, "meta") and node.meta
+                        else None
+                    ),
+                    column=(
+                        node.meta.get("column")
+                        if hasattr(node, "meta") and node.meta
+                        else None
+                    ),
+                    severity=self.severity,
+                    node=node,
+                )
+            )
+        self.generic_visit(node)
+
+    def visit_modifycolumn(self, node: exp.ModifyColumn) -> None:
+        self.violations.append(
+            Violation(
+                code=self.code,
+                message=(
+                    "Modifying column type is unsafe and causes table rewrites."
+                ),
+                path=self.path,
+                line=(
+                    node.meta.get("line")
+                    if hasattr(node, "meta") and node.meta
+                    else None
+                ),
+                column=(
+                    node.meta.get("column")
+                    if hasattr(node, "meta") and node.meta
+                    else None
+                ),
+                severity=self.severity,
+                node=node,
+            )
+        )
+        self.generic_visit(node)
+
+
 @RuleRegistry.register
 class TableRewritingTypeConversionRule(Rule):
     """Checks for column modification statements that alter column data types."""
@@ -297,60 +381,13 @@ class TableRewritingTypeConversionRule(Rule):
     metadata = AEG_104_META
 
     def evaluate(self, context: RuleContext) -> list[Violation]:
-        violations = []
-
-        class TypeConversionVisitor(ASTVisitor):
-            def visit_altercolumn(self, node: exp.AlterColumn) -> None:
-                if node.args.get("dtype"):
-                    violations.append(
-                        Violation(
-                            code=AEG_104_META.code,
-                            message=(
-                                "Altering column data type is unsafe and "
-                                "causes table rewrites."
-                            ),
-                            path=context.migration.path,
-                            line=(
-                                node.meta.get("line")
-                                if hasattr(node, "meta") and node.meta
-                                else None
-                            ),
-                            column=(
-                                node.meta.get("column")
-                                if hasattr(node, "meta") and node.meta
-                                else None
-                            ),
-                            severity=AEG_104_META.severity,
-                            node=node,
-                        )
-                    )
-                self.generic_visit(node)
-
-            def visit_modifycolumn(self, node: exp.ModifyColumn) -> None:
-                violations.append(
-                    Violation(
-                        code=AEG_104_META.code,
-                        message=(
-                            "Modifying column type is unsafe and causes table rewrites."
-                        ),
-                        path=context.migration.path,
-                        line=(
-                            node.meta.get("line")
-                            if hasattr(node, "meta") and node.meta
-                            else None
-                        ),
-                        column=(
-                            node.meta.get("column")
-                            if hasattr(node, "meta") and node.meta
-                            else None
-                        ),
-                        severity=AEG_104_META.severity,
-                        node=node,
-                    )
-                )
-                self.generic_visit(node)
-
-        visitor = TypeConversionVisitor()
+        violations: list[Violation] = []
+        visitor = TypeConversionVisitor(
+            violations=violations,
+            path=context.migration.path,
+            code=self.metadata.code,
+            severity=self.metadata.severity,
+        )
         for node in context.migration.ast_nodes:
             visitor.visit(node)
 
@@ -393,6 +430,102 @@ AEG_105_META = RuleMetadata(
 )
 
 
+class ForeignKeyVisitor(ASTVisitor):
+    def __init__(
+        self,
+        violations: list[Violation],
+        path: Path,
+        code: str,
+        severity: Severity,
+    ) -> None:
+        super().__init__()
+        self.violations = violations
+        self.path = path
+        self.code = code
+        self.severity = severity
+
+    def visit_foreignkey(self, node: exp.ForeignKey) -> None:
+        # Find the parent Alter statement
+        parent = node.parent
+        alter_node = None
+        while parent:
+            if isinstance(parent, exp.Alter):
+                alter_node = parent
+                break
+            parent = parent.parent
+
+        if alter_node and not alter_node.args.get("not_valid"):
+            self.violations.append(
+                Violation(
+                    code=self.code,
+                    message="Adding a foreign key without NOT VALID is unsafe.",
+                    path=self.path,
+                    line=(
+                        node.meta.get("line")
+                        if hasattr(node, "meta") and node.meta
+                        else None
+                    ),
+                    column=(
+                        node.meta.get("column")
+                        if hasattr(node, "meta") and node.meta
+                        else None
+                    ),
+                    severity=self.severity,
+                    node=node,
+                )
+            )
+        self.generic_visit(node)
+
+    def visit_reference(self, node: exp.Reference) -> None:
+        # If this reference is inside ForeignKey, visit_foreignkey handles it
+        p = node.parent
+        is_in_fk = False
+        while p:
+            if isinstance(p, exp.ForeignKey):
+                is_in_fk = True
+                break
+            p = p.parent
+
+        if is_in_fk:
+            self.generic_visit(node)
+            return
+
+        # Find the parent Alter statement
+        parent = node.parent
+        alter_node = None
+        while parent:
+            if isinstance(parent, exp.Alter):
+                alter_node = parent
+                break
+            parent = parent.parent
+
+        if alter_node:
+            self.violations.append(
+                Violation(
+                    code=self.code,
+                    message=(
+                        "Adding an inline foreign key reference constraint "
+                        "is unsafe. Add the column first, then add the "
+                        "constraint NOT VALID."
+                    ),
+                    path=self.path,
+                    line=(
+                        node.meta.get("line")
+                        if hasattr(node, "meta") and node.meta
+                        else None
+                    ),
+                    column=(
+                        node.meta.get("column")
+                        if hasattr(node, "meta") and node.meta
+                        else None
+                    ),
+                    severity=self.severity,
+                    node=node,
+                )
+            )
+        self.generic_visit(node)
+
+
 @RuleRegistry.register
 class ForeignKeyWithoutNotValidRule(Rule):
     """Checks for PostgreSQL foreign key additions missing the NOT VALID option."""
@@ -404,91 +537,13 @@ class ForeignKeyWithoutNotValidRule(Rule):
         if context.migration.dialect != SQLDialect.POSTGRESQL:
             return []
 
-        violations = []
-
-        class ForeignKeyVisitor(ASTVisitor):
-            def visit_foreignkey(self, node: exp.ForeignKey) -> None:
-                # Find the parent Alter statement
-                parent = node.parent
-                alter_node = None
-                while parent:
-                    if isinstance(parent, exp.Alter):
-                        alter_node = parent
-                        break
-                    parent = parent.parent
-
-                if alter_node and not alter_node.args.get("not_valid"):
-                    violations.append(
-                        Violation(
-                            code=AEG_105_META.code,
-                            message="Adding a foreign key without NOT VALID is unsafe.",
-                            path=context.migration.path,
-                            line=(
-                                node.meta.get("line")
-                                if hasattr(node, "meta") and node.meta
-                                else None
-                            ),
-                            column=(
-                                node.meta.get("column")
-                                if hasattr(node, "meta") and node.meta
-                                else None
-                            ),
-                            severity=AEG_105_META.severity,
-                            node=node,
-                        )
-                    )
-                self.generic_visit(node)
-
-            def visit_reference(self, node: exp.Reference) -> None:
-                # If this reference is inside ForeignKey, visit_foreignkey handles it
-                p = node.parent
-                is_in_fk = False
-                while p:
-                    if isinstance(p, exp.ForeignKey):
-                        is_in_fk = True
-                        break
-                    p = p.parent
-
-                if is_in_fk:
-                    self.generic_visit(node)
-                    return
-
-                # Find the parent Alter statement
-                parent = node.parent
-                alter_node = None
-                while parent:
-                    if isinstance(parent, exp.Alter):
-                        alter_node = parent
-                        break
-                    parent = parent.parent
-
-                if alter_node:
-                    violations.append(
-                        Violation(
-                            code=AEG_105_META.code,
-                            message=(
-                                "Adding an inline foreign key reference constraint "
-                                "is unsafe. Add the column first, then add the "
-                                "constraint NOT VALID."
-                            ),
-                            path=context.migration.path,
-                            line=(
-                                node.meta.get("line")
-                                if hasattr(node, "meta") and node.meta
-                                else None
-                            ),
-                            column=(
-                                node.meta.get("column")
-                                if hasattr(node, "meta") and node.meta
-                                else None
-                            ),
-                            severity=AEG_105_META.severity,
-                            node=node,
-                        )
-                    )
-                self.generic_visit(node)
-
-        visitor = ForeignKeyVisitor()
+        violations: list[Violation] = []
+        visitor = ForeignKeyVisitor(
+            violations=violations,
+            path=context.migration.path,
+            code=self.metadata.code,
+            severity=self.metadata.severity,
+        )
         for node in context.migration.ast_nodes:
             visitor.visit(node)
 

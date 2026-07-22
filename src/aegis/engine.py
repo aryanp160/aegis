@@ -99,6 +99,10 @@ class RuleEngine:
                 migration, rule_instances, config
             )
 
+            raw_lines = None
+            if migration_violations and migration.raw_content:
+                raw_lines = migration.raw_content.splitlines()
+
             # Post-process violations based on configuration
             for violation in migration_violations:
                 # 0. Enrich violation with metadata and formatting details
@@ -124,27 +128,30 @@ class RuleEngine:
 
                     if (
                         not violation.sql_snippet
-                        and migration.raw_content
+                        and raw_lines is not None
                         and violation.line is not None
                     ):
-                        lines = migration.raw_content.splitlines()
-                        if 0 < violation.line <= len(lines):
-                            violation.sql_snippet = lines[violation.line - 1].strip()
+                        if 0 < violation.line <= len(raw_lines):
+                            sql_line = raw_lines[violation.line - 1]
+                            violation.sql_snippet = sql_line.strip()
 
                     # Generate highlighted SQL
-                    if migration.raw_content and violation.line is not None:
-                        lines = migration.raw_content.splitlines()
-                        if 0 < violation.line <= len(lines):
-                            offending_line = lines[violation.line - 1]
+                    if raw_lines is not None and violation.line is not None:
+                        if 0 < violation.line <= len(raw_lines):
+                            offending_line = raw_lines[violation.line - 1]
                             col = (
-                                violation.column if violation.column is not None else 0
+                                violation.column
+                                if violation.column is not None
+                                else 0
                             )
 
                             # Determine highlight length
                             width = 1
                             if violation.node is not None:
                                 try:
-                                    node_sql = violation.node.sql(dialect=dialect_name)
+                                    node_sql = violation.node.sql(
+                                        dialect=dialect_name
+                                    )
                                     width = len(node_sql)
                                 except Exception:
                                     pass

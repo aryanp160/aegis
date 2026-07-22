@@ -1,4 +1,5 @@
 from abc import ABC, abstractmethod
+from collections.abc import Callable
 
 from sqlglot.expressions import Expression
 
@@ -9,14 +10,28 @@ from aegis.rules.models import RuleMetadata, Violation
 class ASTVisitor:
     """Base visitor walking and routing sqlglot AST nodes to subclass handlers."""
 
+    def __init__(self) -> None:
+        """Initializes the ASTVisitor with a method cache."""
+        self._visitor_cache: dict[type, Callable[[Expression], None]] = {}
+
     def visit(self, node: Expression) -> None:
         """Visits a node by routing to its type-specific method (e.g. visit_create).
 
         Args:
             node: The sqlglot Expression node to visit.
         """
-        method_name = f"visit_{node.__class__.__name__.lower()}"
-        visitor_method = getattr(self, method_name, self.generic_visit)
+        cache = getattr(self, "_visitor_cache", None)
+        if cache is None:
+            cache = {}
+            self._visitor_cache = cache
+
+        node_class = node.__class__
+        visitor_method = cache.get(node_class)
+        if visitor_method is None:
+            method_name = f"visit_{node_class.__name__.lower()}"
+            visitor_method = getattr(self, method_name, self.generic_visit)
+            cache[node_class] = visitor_method
+        assert visitor_method is not None
         visitor_method(node)
 
     def generic_visit(self, node: Expression) -> None:
