@@ -135,3 +135,14 @@ def test_aeg_109_mysql_ignored() -> None:
     violations = rule.evaluate(ctx)
 
     assert len(violations) == 0
+
+
+def test_aeg_106_postgres_concurrently_inside_rollback_transaction() -> None:
+    sql = "BEGIN; CREATE INDEX CONCURRENTLY idx ON users (email); ROLLBACK;"
+    ctx = _make_context(sql, SQLDialect.POSTGRESQL)
+    rule = ConcurrentlyInsideTransactionRule(ConcurrentlyInsideTransactionRule.metadata)
+    violations = rule.evaluate(ctx)
+
+    assert len(violations) == 1
+    assert violations[0].code == "AEG-106"
+    assert violations[0].severity == Severity.ERROR

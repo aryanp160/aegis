@@ -114,5 +114,57 @@ A `Violation` requires context bridging the abstract syntax issue back to the ph
 - `path`: The file path from `context.migration.path`.
 - `line` & `column`: Extracted from the `sqlglot` AST node properties if available.
 - `severity`: The configured severity for the rule execution.
+- `title`: Short human-readable name of the rule.
+- `category`: The category classification of the rule.
+- `sql_snippet`: Raw SQL statement compiled from the offending AST node.
+- `highlighted_sql`: Format-ready SQL line containing visual carets pointing to the exact violation location.
+- `risk`: Architectural consequence or risk explanation.
+- `remediation`: Guidance or safe alternative to fix the violation.
+- `documentation_url`: Link to the online rule documentation reference.
+
+Violations can be rendered as a beautiful multi-line terminal diagnostic block using the `violation.render()` method (which is also the default string representation).
 
 Violations across all migrations and all rules are aggregated by the `RuleEngine`, which sorts them deterministically by severity and path before generating the final `AnalysisResult`.
+
+## Rule Suppression and Configuration
+
+Aegis supports extensive custom configurations via a standalone `aegis.toml` file (or a `[tool.aegis]` table inside `pyproject.toml`).
+
+### Global Rule Ignore List
+You can completely disable specific rules across your entire codebase using the `ignore_rules` list:
+
+```toml
+ignore_rules = [
+    "AEG-101",
+    "AEG-110"
+]
+```
+
+### Per-Rule Configuration
+You can enable/disable rules individually or override their severity levels using the `[rules]` table:
+
+```toml
+[rules."AEG-101"]
+enabled = false
+
+[rules."AEG-102"]
+severity = "warning"  # Options: error, warning, info
+```
+
+### Per-File Suppression
+You can suppress specific rules from firing on certain files or directory pattern globs under the `[suppressions]` table:
+
+```toml
+[suppressions]
+"migrations/0001_initial.sql" = ["AEG-101", "AEG-108"]
+"legacy/*.sql" = ["AEG-110"]
+```
+
+## Advanced PostgreSQL Edge Cases
+
+Aegis implements robust, structural AST inspection that catches advanced edge cases beyond simple statement matching:
+- **AEG-103 (Unsafe NOT NULL column addition)**: In addition to standard `ADD COLUMN ... NOT NULL` additions on existing tables, Aegis detects `ALTER COLUMN ... SET NOT NULL` operations on existing columns which block table operations for validation scans.
+- **AEG-105 (Foreign keys without NOT VALID)**: In addition to standard foreign key constraint additions, Aegis parses inline foreign key references (`ADD COLUMN ... REFERENCES ...`) during column additions and flags them as unsafe because PostgreSQL validates them immediately without NOT VALID protection.
+- **AEG-106 (CONCURRENTLY inside transaction)**: Detects when `CONCURRENTLY` is used on index operations inside a transaction block (e.g. `BEGIN`, `COMMIT`, or `ROLLBACK`).
+
+

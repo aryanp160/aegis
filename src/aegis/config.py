@@ -2,7 +2,9 @@ import tomllib
 from pathlib import Path
 from typing import Self
 
-from pydantic import BaseModel, Field, ValidationError
+from pydantic import BaseModel, ConfigDict, Field, ValidationError, model_validator
+
+from aegis.rules.enums import Severity
 
 
 class ConfigError(Exception):
@@ -17,8 +19,19 @@ class ConfigValidationError(ConfigError):
     """Raised when the configuration parameters break validation rules."""
 
 
+class RuleOverrideConfig(BaseModel):
+    """Configuration overrides for a specific static analysis rule."""
+
+    enabled: bool = Field(default=True, description="Enable or disable the rule.")
+    severity: Severity | None = Field(
+        default=None, description="Override severity for the rule."
+    )
+
+
 class RuleConfig(BaseModel):
     """Configuration options for static analysis migration rules."""
+
+    model_config = ConfigDict(extra="allow")
 
     allow_drop_table: bool = Field(
         default=False, description="Allow dropping tables in migrations."
@@ -29,6 +42,29 @@ class RuleConfig(BaseModel):
     allow_rename_table: bool = Field(
         default=True, description="Allow renaming tables in migrations."
     )
+
+    @model_validator(mode="after")
+    def validate_overrides(self) -> Self:
+        """Validates that any extra dictionary properties are valid overrides."""
+        if self.model_extra:
+            for key, val in self.model_extra.items():
+                if isinstance(val, dict):
+                    try:
+                        RuleOverrideConfig(**val)
+                    except ValidationError as e:
+                        raise ValueError(
+                            f"Invalid override settings for rule '{key}': {e}"
+                        ) from e
+        return self
+
+    def get_overrides(self) -> dict[str, RuleOverrideConfig]:
+        """Extracts rule-specific overrides from extra configuration fields."""
+        overrides = {}
+        if self.model_extra:
+            for key, val in self.model_extra.items():
+                if isinstance(val, dict):
+                    overrides[key] = RuleOverrideConfig(**val)
+        return overrides
 
 
 class AegisConfig(BaseModel):
@@ -41,6 +77,14 @@ class AegisConfig(BaseModel):
     rules: RuleConfig = Field(
         default_factory=RuleConfig,
         description="Active rule assertions and policies.",
+    )
+    ignore_rules: list[str] = Field(
+        default_factory=list,
+        description="List of rule codes to ignore globally.",
+    )
+    suppressions: dict[str, list[str]] = Field(
+        default_factory=dict,
+        description="Map of file path patterns to rule codes to suppress.",
     )
 
     @classmethod

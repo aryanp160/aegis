@@ -1,4 +1,5 @@
 import logging
+from pathlib import Path
 
 from sqlglot import exp
 
@@ -41,6 +42,48 @@ AEG_108_META = RuleMetadata(
 )
 
 
+class SerialVisitor(ASTVisitor):
+    def __init__(
+        self,
+        violations: list[Violation],
+        path: Path,
+        code: str,
+        severity: Severity,
+    ) -> None:
+        super().__init__()
+        self.violations = violations
+        self.path = path
+        self.code = code
+        self.severity = severity
+
+    def visit_datatype(self, node: exp.DataType) -> None:
+        if node.this in (
+            exp.DataType.Type.SERIAL,
+            exp.DataType.Type.BIGSERIAL,
+            exp.DataType.Type.SMALLSERIAL,
+        ):
+            self.violations.append(
+                Violation(
+                    code=self.code,
+                    message=f"Discouraged data type '{node.this}' detected.",
+                    path=self.path,
+                    line=(
+                        node.meta.get("line")
+                        if hasattr(node, "meta") and node.meta
+                        else None
+                    ),
+                    column=(
+                        node.meta.get("column")
+                        if hasattr(node, "meta") and node.meta
+                        else None
+                    ),
+                    severity=self.severity,
+                    node=node,
+                )
+            )
+        self.generic_visit(node)
+
+
 @RuleRegistry.register
 class SerialUsageRule(Rule):
     """Checks for PostgreSQL SERIAL type columns."""
@@ -51,36 +94,13 @@ class SerialUsageRule(Rule):
         if context.migration.dialect != SQLDialect.POSTGRESQL:
             return []
 
-        violations = []
-
-        class SerialVisitor(ASTVisitor):
-            def visit_datatype(self, node: exp.DataType) -> None:
-                if node.this in (
-                    exp.DataType.Type.SERIAL,
-                    exp.DataType.Type.BIGSERIAL,
-                    exp.DataType.Type.SMALLSERIAL,
-                ):
-                    violations.append(
-                        Violation(
-                            code=AEG_108_META.code,
-                            message=f"Discouraged data type '{node.this}' detected.",
-                            path=context.migration.path,
-                            line=(
-                                node.meta.get("line")
-                                if hasattr(node, "meta") and node.meta
-                                else None
-                            ),
-                            column=(
-                                node.meta.get("column")
-                                if hasattr(node, "meta") and node.meta
-                                else None
-                            ),
-                            severity=AEG_108_META.severity,
-                        )
-                    )
-                self.generic_visit(node)
-
-        visitor = SerialVisitor()
+        violations: list[Violation] = []
+        visitor = SerialVisitor(
+            violations=violations,
+            path=context.migration.path,
+            code=self.metadata.code,
+            severity=self.metadata.severity,
+        )
         for node in context.migration.ast_nodes:
             visitor.visit(node)
 
@@ -113,6 +133,46 @@ AEG_110_META = RuleMetadata(
 )
 
 
+class TimestampVisitor(ASTVisitor):
+    def __init__(
+        self,
+        violations: list[Violation],
+        path: Path,
+        code: str,
+        severity: Severity,
+    ) -> None:
+        super().__init__()
+        self.violations = violations
+        self.path = path
+        self.code = code
+        self.severity = severity
+
+    def visit_datatype(self, node: exp.DataType) -> None:
+        if node.this == exp.DataType.Type.TIMESTAMP:
+            self.violations.append(
+                Violation(
+                    code=self.code,
+                    message=(
+                        "TIMESTAMP without timezone is discouraged. Use TIMESTAMPTZ."
+                    ),
+                    path=self.path,
+                    line=(
+                        node.meta.get("line")
+                        if hasattr(node, "meta") and node.meta
+                        else None
+                    ),
+                    column=(
+                        node.meta.get("column")
+                        if hasattr(node, "meta") and node.meta
+                        else None
+                    ),
+                    severity=self.severity,
+                    node=node,
+                )
+            )
+        self.generic_visit(node)
+
+
 @RuleRegistry.register
 class TimestampWithoutTimeZoneRule(Rule):
     """Checks for PostgreSQL TIMESTAMP (without timezone) column data types."""
@@ -123,35 +183,13 @@ class TimestampWithoutTimeZoneRule(Rule):
         if context.migration.dialect != SQLDialect.POSTGRESQL:
             return []
 
-        violations = []
-
-        class TimestampVisitor(ASTVisitor):
-            def visit_datatype(self, node: exp.DataType) -> None:
-                if node.this == exp.DataType.Type.TIMESTAMP:
-                    violations.append(
-                        Violation(
-                            code=AEG_110_META.code,
-                            message=(
-                                "TIMESTAMP without timezone is discouraged. Use "
-                                "TIMESTAMPTZ."
-                            ),
-                            path=context.migration.path,
-                            line=(
-                                node.meta.get("line")
-                                if hasattr(node, "meta") and node.meta
-                                else None
-                            ),
-                            column=(
-                                node.meta.get("column")
-                                if hasattr(node, "meta") and node.meta
-                                else None
-                            ),
-                            severity=AEG_110_META.severity,
-                        )
-                    )
-                self.generic_visit(node)
-
-        visitor = TimestampVisitor()
+        violations: list[Violation] = []
+        visitor = TimestampVisitor(
+            violations=violations,
+            path=context.migration.path,
+            code=self.metadata.code,
+            severity=self.metadata.severity,
+        )
         for node in context.migration.ast_nodes:
             visitor.visit(node)
 

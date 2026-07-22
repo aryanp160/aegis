@@ -74,6 +74,9 @@ class RuleEngine:
         start_time = time.perf_counter()
         violations: list[Violation] = []
 
+        if config is not None:
+            RuleRegistry.apply_config(config)
+
         rules = RuleRegistry.get_rules()
         logger.info("Executing rule engine analysis with %d active rules.", len(rules))
 
@@ -85,13 +88,108 @@ class RuleEngine:
             except Exception as e:
                 logger.error("Failed to instantiate rule %s: %s", rule_cls.__name__, e)
 
+        # Create a mapping from rule code to rule instances
+        rule_map = {rule.metadata.code: rule for rule in rule_instances}
+        from aegis.parser.enums import SQLDialect
+
         # Run each migration against each rule instance
         # Designed to be easily wrapped in a ProcessPoolExecutor in the future
         for migration in migrations:
             migration_violations = self._analyze_migration(
                 migration, rule_instances, config
             )
-            violations.extend(migration_violations)
+
+            raw_lines = None
+            if migration_violations and migration.raw_content:
+                raw_lines = migration.raw_content.splitlines()
+
+            # Post-process violations based on configuration
+            for violation in migration_violations:
+                # 0. Enrich violation with metadata and formatting details
+                rule = rule_map.get(violation.code)
+                if rule is not None:
+                    violation.title = rule.metadata.name
+                    violation.category = rule.metadata.category
+                    violation.risk = rule.metadata.risk
+                    violation.remediation = rule.metadata.remediation
+                    violation.documentation_url = rule.metadata.documentation_url
+
+                    # Extract SQL snippet using AST node
+                    is_pg = migration.dialect == SQLDialect.POSTGRESQL
+                    dialect_name = "postgres" if is_pg else "mysql"
+                    if violation.node is not None:
+                        try:
+                            curr = violation.node
+                            while curr.parent is not None:
+                                curr = curr.parent
+                            violation.sql_snippet = curr.sql(dialect=dialect_name)
+                        except Exception as e:
+                            logger.debug("Failed to compile SQL snippet: %s", e)
+
+                    if (
+                        not violation.sql_snippet
+                        and raw_lines is not None
+                        and violation.line is not None
+                    ):
+                        if 0 < violation.line <= len(raw_lines):
+                            sql_line = raw_lines[violation.line - 1]
+                            violation.sql_snippet = sql_line.strip()
+
+                    # Generate highlighted SQL
+                    if raw_lines is not None and violation.line is not None:
+                        if 0 < violation.line <= len(raw_lines):
+                            offending_line = raw_lines[violation.line - 1]
+                            col = (
+                                violation.column if violation.column is not None else 0
+                            )
+
+                            # Determine highlight length
+                            width = 1
+                            if violation.node is not None:
+                                try:
+                                    node_sql = violation.node.sql(dialect=dialect_name)
+                                    width = len(node_sql)
+                                except Exception:
+                                    pass
+
+                            carets = "^" * max(1, width)
+                            padding = " " * col
+                            violation.highlighted_sql = (
+                                f"{violation.line:4d} | {offending_line}\n"
+                                f"     | {padding}{carets}"
+                            )
+
+                # 1. Apply severity overrides
+                if (
+                    config is not None
+                    and hasattr(config, "rules")
+                    and hasattr(config.rules, "get_overrides")
+                ):
+                    overrides = config.rules.get_overrides()
+                    if violation.code in overrides:
+                        override = overrides[violation.code]
+                        if override.severity is not None:
+                            violation.severity = override.severity
+
+                # 2. Apply per-file suppressions
+                suppressed = False
+                if config is not None and hasattr(config, "suppressions"):
+                    import fnmatch
+
+                    for pattern, ignored_codes in config.suppressions.items():
+                        path_str = violation.path.as_posix()
+                        name_str = violation.path.name
+                        if (
+                            fnmatch.fnmatch(path_str, pattern)
+                            or fnmatch.fnmatch(name_str, pattern)
+                            or fnmatch.fnmatch(str(violation.path), pattern)
+                        ):
+                            if violation.code in ignored_codes:
+                                suppressed = True
+                                break
+
+                if not suppressed:
+                    violations.append(violation)
 
         # Sort violations deterministically
         violations.sort(

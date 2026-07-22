@@ -1,4 +1,5 @@
 import logging
+from pathlib import Path
 
 from sqlglot import exp
 
@@ -58,8 +59,8 @@ class ConcurrentlyInsideTransactionRule(Rule):
         target_node: exp.Expression | None = None
 
         for node in context.migration.ast_nodes:
-            # Check for transaction statements (BEGIN, START TRANSACTION, COMMIT)
-            if isinstance(node, (exp.Transaction, exp.Commit)):
+            # Check for transaction statements (BEGIN, COMMIT, ROLLBACK, etc.)
+            if isinstance(node, (exp.Transaction, exp.Commit, exp.Rollback)):
                 has_transaction_stmt = True
 
             # Check for concurrently create/drop index
@@ -92,6 +93,7 @@ class ConcurrentlyInsideTransactionRule(Rule):
                         else None
                     ),
                     severity=self.metadata.severity,
+                    node=target_node,
                 )
             )
 
@@ -121,6 +123,45 @@ AEG_107_META = RuleMetadata(
 )
 
 
+class DropVisitor(ASTVisitor):
+    def __init__(
+        self,
+        violations: list[Violation],
+        path: Path,
+        code: str,
+        severity: Severity,
+    ) -> None:
+        super().__init__()
+        self.violations = violations
+        self.path = path
+        self.code = code
+        self.severity = severity
+
+    def visit_drop(self, node: exp.Drop) -> None:
+        kind = node.args.get("kind")
+        if kind in ("TABLE", "COLUMN"):
+            self.violations.append(
+                Violation(
+                    code=self.code,
+                    message=f"Destructive DROP {kind} statement detected.",
+                    path=self.path,
+                    line=(
+                        node.meta.get("line")
+                        if hasattr(node, "meta") and node.meta
+                        else None
+                    ),
+                    column=(
+                        node.meta.get("column")
+                        if hasattr(node, "meta") and node.meta
+                        else None
+                    ),
+                    severity=self.severity,
+                    node=node,
+                )
+            )
+        self.generic_visit(node)
+
+
 @RuleRegistry.register
 class DropTableColumnProtectionRule(Rule):
     """Checks for DROP TABLE or DROP COLUMN operations."""
@@ -134,33 +175,13 @@ class DropTableColumnProtectionRule(Rule):
         ):
             return []
 
-        violations = []
-
-        class DropVisitor(ASTVisitor):
-            def visit_drop(self, node: exp.Drop) -> None:
-                kind = node.args.get("kind")
-                if kind in ("TABLE", "COLUMN"):
-                    violations.append(
-                        Violation(
-                            code=AEG_107_META.code,
-                            message=f"Destructive DROP {kind} statement detected.",
-                            path=context.migration.path,
-                            line=(
-                                node.meta.get("line")
-                                if hasattr(node, "meta") and node.meta
-                                else None
-                            ),
-                            column=(
-                                node.meta.get("column")
-                                if hasattr(node, "meta") and node.meta
-                                else None
-                            ),
-                            severity=AEG_107_META.severity,
-                        )
-                    )
-                self.generic_visit(node)
-
-        visitor = DropVisitor()
+        violations: list[Violation] = []
+        visitor = DropVisitor(
+            violations=violations,
+            path=context.migration.path,
+            code=self.metadata.code,
+            severity=self.metadata.severity,
+        )
         for node in context.migration.ast_nodes:
             visitor.visit(node)
 
