@@ -6,7 +6,7 @@ import typer
 from rich.console import Console
 
 from aegis import __version__
-from aegis.config import AegisConfig
+from aegis.config import load_config
 from aegis.logging import setup_logging
 from aegis.parser import SqlParser, discover_migration_files
 from aegis.rules import check_rules
@@ -85,7 +85,7 @@ def lint(
             raise typer.Exit(code=2)
 
     parser = SqlParser()
-    config = AegisConfig()
+    config = load_config()
     has_violations = False
 
     for file_path in files_to_lint:
@@ -94,7 +94,7 @@ def lint(
             if not result.success:
                 has_violations = True
                 for err in result.errors:
-                    print(f"{file_path}: [syntax_error] {err}")
+                    print(f"{file_path}: [ERROR] [syntax_error] {err}")
             else:
                 migration = result.migration
                 if migration:
@@ -102,7 +102,10 @@ def lint(
                     if violations:
                         has_violations = True
                         for v in violations:
-                            print(f"{v.file_path}: [{v.rule_name}] {v.message}")
+                            print(
+                                f"{v.file_path}: [{v.severity.upper()}] "
+                                f"[{v.rule_name}] {v.message}"
+                            )
         except Exception as e:
             print(f"Internal error processing {file_path}: {e}")
             raise typer.Exit(code=2) from e
@@ -111,3 +114,32 @@ def lint(
         raise typer.Exit(code=1)
 
     raise typer.Exit(code=0)
+
+
+@app.command(name="explain")
+def explain(
+    rule_id: Annotated[
+        str,
+        typer.Argument(help="The ID of the rule to explain."),
+    ],
+) -> None:
+    """Show detailed documentation and remediation steps for a rule."""
+    config = load_config()
+    normalized_rule_id = rule_id.lower().replace("-", "_")
+
+    from aegis.rules.metadata import RULE_DOCUMENTATION
+
+    if normalized_rule_id not in RULE_DOCUMENTATION:
+        print(f"Error: Unknown rule '{rule_id}'")
+        raise typer.Exit(code=2)
+
+    doc = RULE_DOCUMENTATION[normalized_rule_id]
+    severity = config.severities.get(normalized_rule_id, doc["severity"])
+
+    print(f"Rule ID: {normalized_rule_id}")
+    print(f"Description: {doc['description']}")
+    print(f"Severity: {severity}")
+    print("\nWhy It Matters:")
+    print(doc["why_it_matters"])
+    print("\nRemediation:")
+    print(doc["remediation"])

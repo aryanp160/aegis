@@ -106,3 +106,11 @@ def test_check_rules_allow_rename_table() -> None:
     assert len(violations) == 1
     assert violations[0].rule_name == "allow_rename_table"
     assert "Table renaming detected" in violations[0].message
+    # Default severity is warning
+    assert violations[0].severity == "warning"
+
+    # Policy: allow_rename_table = False with severity override
+    config.severities["allow_rename_table"] = "error"
+    violations = check_rules(migration, config)
+    assert len(violations) == 1
+    assert violations[0].severity == "error"

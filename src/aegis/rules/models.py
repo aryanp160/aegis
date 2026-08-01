@@ -8,4 +8,5 @@ class Violation(BaseModel):
 
     file_path: Path = Field(description="The path to the SQL migration file.")
     rule_name: str = Field(description="The name of the rule that was violated.")
+    severity: str = Field(description="The severity level of the violation.")
     message: str = Field(description="Detailed violation description.")

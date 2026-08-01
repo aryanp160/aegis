@@ -1,8 +1,8 @@
 import tomllib
 from pathlib import Path
-from typing import Self
+from typing import Any, Self
 
-from pydantic import BaseModel, Field, ValidationError
+from pydantic import BaseModel, Field, ValidationError, field_validator
 
 
 class ConfigError(Exception):
@@ -42,6 +42,26 @@ class AegisConfig(BaseModel):
         default_factory=RuleConfig,
         description="Active rule assertions and policies.",
     )
+    severities: dict[str, str] = Field(
+        default_factory=lambda: {
+            "allow_drop_table": "error",
+            "allow_drop_column": "error",
+            "allow_rename_table": "warning",
+        },
+        description="Severity overrides for rules.",
+    )
+
+    @field_validator("severities", mode="before")
+    @classmethod
+    def merge_severities_defaults(cls, v: Any) -> Any:
+        defaults = {
+            "allow_drop_table": "error",
+            "allow_drop_column": "error",
+            "allow_rename_table": "warning",
+        }
+        if isinstance(v, dict):
+            return {**defaults, **v}
+        return v
 
     @classmethod
     def from_toml(cls, toml_content: str) -> Self:

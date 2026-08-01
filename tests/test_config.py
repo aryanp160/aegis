@@ -123,3 +123,18 @@ allow_drop_table = "not-a-boolean"
     with pytest.raises(ConfigValidationError) as exc_info:
         load_config(config_file)
     assert "Configuration parameters failed validation" in str(exc_info.value)
+
+
+def test_load_config_with_severity_overrides(tmp_path: Path) -> None:
+    """Verifies loading config with custom rule severities."""
+    config_file = tmp_path / "aegis.toml"
+    config_file.write_text(
+        """
+[severities]
+allow_rename_table = "error"
+""",
+        encoding="utf-8",
+    )
+    config = load_config(config_file)
+    assert config.severities["allow_rename_table"] == "error"
+    assert config.severities["allow_drop_table"] == "error"

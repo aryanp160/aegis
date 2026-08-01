@@ -22,10 +22,12 @@ def check_rules(migration: ParsedMigration, config: AegisConfig) -> list[Violati
         if not config.rules.allow_drop_table:
             # Check if this is a DROP TABLE statement
             if isinstance(node, exp.Drop) and node.args.get("kind") == "TABLE":
+                sev = config.severities.get("allow_drop_table", "error")
                 violations.append(
                     Violation(
                         file_path=migration.path,
                         rule_name="allow_drop_table",
+                        severity=sev,
                         message=(
                             "Table deletion detected. Dropping tables is "
                             "forbidden by current policy."
@@ -44,10 +46,12 @@ def check_rules(migration: ParsedMigration, config: AegisConfig) -> list[Violati
                         and action.args.get("kind") == "COLUMN"
                     )
                     if is_drop_col:
+                        sev = config.severities.get("allow_drop_column", "error")
                         violations.append(
                             Violation(
                                 file_path=migration.path,
                                 rule_name="allow_drop_column",
+                                severity=sev,
                                 message=(
                                     "Column deletion detected. Dropping columns is "
                                     "forbidden by current policy."
@@ -58,10 +62,12 @@ def check_rules(migration: ParsedMigration, config: AegisConfig) -> list[Violati
                 # Rule 3: allow_rename_table
                 if not config.rules.allow_rename_table:
                     if isinstance(action, exp.AlterRename):
+                        sev = config.severities.get("allow_rename_table", "warning")
                         violations.append(
                             Violation(
                                 file_path=migration.path,
                                 rule_name="allow_rename_table",
+                                severity=sev,
                                 message=(
                                     "Table renaming detected. Renaming tables is "
                                     "forbidden by current policy."

@@ -89,3 +89,22 @@ def test_lint_directory(tmp_path: Path) -> None:
     result = runner.invoke(app, ["lint", str(migrations_dir)])
     assert result.exit_code == 1
     assert "[allow_drop_table]" in result.stdout
+    assert "[ERROR]" in result.stdout
+
+
+def test_explain_valid_rule() -> None:
+    """Verifies explaining a valid rule prints documentation."""
+    result = runner.invoke(app, ["explain", "allow-drop-table"])
+    assert result.exit_code == 0
+    assert "Rule ID: allow_drop_table" in result.stdout
+    assert "Description: Prohibits dropping tables" in result.stdout
+    assert "Severity: error" in result.stdout
+    assert "Why It Matters:" in result.stdout
+    assert "Remediation:" in result.stdout
+
+
+def test_explain_invalid_rule() -> None:
+    """Verifies explaining an invalid rule prints an error and exits with 2."""
+    result = runner.invoke(app, ["explain", "non-existent-rule"])
+    assert result.exit_code == 2
+    assert "Error: Unknown rule" in result.stdout
