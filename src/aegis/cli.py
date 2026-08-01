@@ -1,10 +1,15 @@
 import logging
+from pathlib import Path
+from typing import Annotated
 
 import typer
 from rich.console import Console
 
 from aegis import __version__
+from aegis.config import AegisConfig
 from aegis.logging import setup_logging
+from aegis.parser import SqlParser, discover_migration_files
+from aegis.rules import check_rules
 
 app = typer.Typer(
     name="aegis",
@@ -51,3 +56,58 @@ def main(
 def version() -> None:
     """Show the version of Aegis."""
     console.print(f"[bold blue]Aegis[/bold blue] version: [green]{__version__}[/green]")
+
+
+@app.command(name="lint")
+def lint(
+    targets: Annotated[
+        list[Path],
+        typer.Argument(help="One or more SQL migration files or directories to lint."),
+    ],
+) -> None:
+    """Lint SQL migration files for rule violations."""
+    files_to_lint: list[Path] = []
+    for target in targets:
+        if not target.exists():
+            print(f"Error: Target path does not exist: {target}")
+            raise typer.Exit(code=2)
+
+        if target.is_file():
+            files_to_lint.append(target)
+        elif target.is_dir():
+            try:
+                files_to_lint.extend(discover_migration_files(target))
+            except Exception as e:
+                print(f"Error discovering files in {target}: {e}")
+                raise typer.Exit(code=2) from e
+        else:
+            print(f"Error: Target path is not a file or directory: {target}")
+            raise typer.Exit(code=2)
+
+    parser = SqlParser()
+    config = AegisConfig()
+    has_violations = False
+
+    for file_path in files_to_lint:
+        try:
+            result = parser.parse(file_path)
+            if not result.success:
+                has_violations = True
+                for err in result.errors:
+                    print(f"{file_path}: [syntax_error] {err}")
+            else:
+                migration = result.migration
+                if migration:
+                    violations = check_rules(migration, config)
+                    if violations:
+                        has_violations = True
+                        for v in violations:
+                            print(f"{v.file_path}: [{v.rule_name}] {v.message}")
+        except Exception as e:
+            print(f"Internal error processing {file_path}: {e}")
+            raise typer.Exit(code=2) from e
+
+    if has_violations:
+        raise typer.Exit(code=1)
+
+    raise typer.Exit(code=0)

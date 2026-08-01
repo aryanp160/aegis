@@ -1,3 +1,5 @@
+from pathlib import Path
+
 from typer.testing import CliRunner
 
 from aegis import __version__
@@ -27,3 +29,63 @@ def test_help_option() -> None:
     result = runner.invoke(app, ["--help"])
     assert result.exit_code == 0
     assert "Aegis: SQL Migration Static Analyzer." in result.stdout
+
+
+def test_lint_valid_migration(tmp_path: Path) -> None:
+    """Verifies that linting a valid SQL migration exits with code 0."""
+    sql_file = tmp_path / "valid.sql"
+    sql_file.write_text(
+        "CREATE TABLE users (id SERIAL PRIMARY KEY, name VARCHAR(100));",
+        encoding="utf-8",
+    )
+    result = runner.invoke(app, ["lint", str(sql_file)])
+    assert result.exit_code == 0
+    assert result.stdout == ""
+
+
+def test_lint_rule_violation(tmp_path: Path) -> None:
+    """Verifies that linting a migration with a violation exits with code 1."""
+    sql_file = tmp_path / "violation.sql"
+    # By default allow_drop_table is False, so DROP TABLE is a violation
+    sql_file.write_text("DROP TABLE users;", encoding="utf-8")
+    result = runner.invoke(app, ["lint", str(sql_file)])
+    assert result.exit_code == 1
+    assert "[allow_drop_table]" in result.stdout
+    assert "Table deletion detected" in result.stdout
+
+
+def test_lint_syntax_error(tmp_path: Path) -> None:
+    """Verifies that linting a migration with syntax error exits with code 1."""
+    sql_file = tmp_path / "bad.sql"
+    sql_file.write_text("CREATE TABLE (id INT;", encoding="utf-8")
+    result = runner.invoke(app, ["lint", str(sql_file)])
+    assert result.exit_code == 1
+    assert "[syntax_error]" in result.stdout
+
+
+def test_lint_non_existent_target() -> None:
+    """Verifies that linting a non-existent path exits with code 2."""
+    result = runner.invoke(app, ["lint", "non_existent_file.sql"])
+    assert result.exit_code == 2
+    assert "Error: Target path does not exist" in result.stdout
+
+
+def test_lint_directory(tmp_path: Path) -> None:
+    """Verifies that linting a directory containing violations exits with code 1."""
+    # Create a subdir
+    migrations_dir = tmp_path / "migrations"
+    migrations_dir.mkdir()
+
+    # Valid file
+    valid_file = migrations_dir / "0001_valid.sql"
+    valid_file.write_text(
+        "CREATE TABLE users (id SERIAL PRIMARY KEY);", encoding="utf-8"
+    )
+
+    # Invalid file
+    invalid_file = migrations_dir / "0002_invalid.sql"
+    invalid_file.write_text("DROP TABLE users;", encoding="utf-8")
+
+    result = runner.invoke(app, ["lint", str(migrations_dir)])
+    assert result.exit_code == 1
+    assert "[allow_drop_table]" in result.stdout
