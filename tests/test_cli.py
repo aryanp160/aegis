@@ -108,3 +108,120 @@ def test_explain_invalid_rule() -> None:
     result = runner.invoke(app, ["explain", "non-existent-rule"])
     assert result.exit_code == 2
     assert "Error: Unknown rule" in result.stdout
+
+
+def test_lint_format_json(tmp_path: Path) -> None:
+    """Verifies that linting with '--format json' outputs valid JSON schema."""
+    sql_file = tmp_path / "violation.sql"
+    sql_file.write_text("DROP TABLE users;", encoding="utf-8")
+    result = runner.invoke(app, ["lint", str(sql_file), "--format", "json"])
+    assert result.exit_code == 1
+
+    import json
+
+    data = json.loads(result.stdout)
+    assert "metadata" in data
+    assert "version" in data["metadata"]
+    assert "timestamp" in data["metadata"]
+    assert data["summary"]["files_scanned"] == 1
+    assert data["summary"]["violations_count"] == 1
+    assert data["summary"]["success"] is False
+    assert len(data["violations"]) == 1
+    assert data["violations"][0]["rule"] == "allow_drop_table"
+    assert data["violations"][0]["severity"] == "error"
+
+
+def test_lint_severity_filtering(tmp_path: Path) -> None:
+    """Verifies that '--severity error' filters out lower severity warnings."""
+    # Create file with both a warning (rename table) and an error (drop table).
+    # To test a warning, write a custom config with allow_rename_table = False
+    # and allow_drop_table = False.
+    config_file = tmp_path / "aegis.toml"
+    config_file.write_text(
+        """
+[rules]
+allow_rename_table = false
+allow_drop_table = false
+""",
+        encoding="utf-8",
+    )
+
+    sql_file = tmp_path / "test.sql"
+    sql_file.write_text(
+        "ALTER TABLE users RENAME TO customers; DROP TABLE logs;",
+        encoding="utf-8",
+    )
+
+    # Run with default (warning & error shown)
+    # Pass the start_path by placing us in that directory
+    result_all = runner.invoke(
+        app, ["lint", str(sql_file), "--format", "json"], env={"COV_CORE_SOURCE": ""}
+    )
+    import json
+
+    # We need to load config in target directory, so we change CWD to tmp_path
+    # so that the configuration file is automatically discovered.
+    import os
+
+    old_cwd = os.getcwd()
+    try:
+        os.chdir(tmp_path)
+        result_all = runner.invoke(app, ["lint", "test.sql", "--format", "json"])
+        data_all = json.loads(result_all.stdout)
+        assert data_all["summary"]["violations_count"] == 2
+
+        # Run with --severity error. Warning should be filtered out.
+        result_err = runner.invoke(
+            app,
+            ["lint", "test.sql", "--format", "json", "--severity", "error"],
+        )
+        data_err = json.loads(result_err.stdout)
+        assert data_err["summary"]["violations_count"] == 1
+        assert data_err["violations"][0]["rule"] == "allow_drop_table"
+    finally:
+        os.chdir(old_cwd)
+
+
+def test_lint_ignore_suppression(tmp_path: Path) -> None:
+    """Verifies that '--ignore' suppresses designated rules."""
+    sql_file = tmp_path / "violation.sql"
+    sql_file.write_text("DROP TABLE users;", encoding="utf-8")
+
+    # Lint with ignore option
+    result = runner.invoke(
+        app,
+        ["lint", str(sql_file), "--format", "json", "--ignore", "allow_drop_table"],
+    )
+    assert result.exit_code == 0
+    import json
+
+    data = json.loads(result.stdout)
+    assert data["summary"]["violations_count"] == 0
+    assert data["summary"]["success"] is True
+
+
+def test_lint_exclude_paths(tmp_path: Path) -> None:
+    """Verifies that '--exclude' skips designated directories or files."""
+    migrations_dir = tmp_path / "migrations"
+    migrations_dir.mkdir()
+
+    # Create normal file
+    f1 = migrations_dir / "0001_init.sql"
+    f1.write_text("DROP TABLE users;", encoding="utf-8")
+
+    # Create file to exclude
+    f2 = migrations_dir / "0002_ignored.sql"
+    f2.write_text("DROP TABLE users;", encoding="utf-8")
+
+    # Run lint excluding f2
+    result = runner.invoke(
+        app,
+        ["lint", str(migrations_dir), "--format", "json", "--exclude", str(f2)],
+    )
+    assert result.exit_code == 1
+    import json
+
+    data = json.loads(result.stdout)
+    assert data["summary"]["files_scanned"] == 1
+    assert data["summary"]["violations_count"] == 1
+    assert Path(data["violations"][0]["file"]).name == "0001_init.sql"
