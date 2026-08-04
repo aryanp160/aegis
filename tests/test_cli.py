@@ -28,7 +28,10 @@ def test_help_option() -> None:
     """Verifies that running 'aegis --help' displays CLI help documentation."""
     result = runner.invoke(app, ["--help"])
     assert result.exit_code == 0
-    assert "Aegis: SQL Migration Static Analyzer." in result.stdout
+    assert (
+        "Aegis: A production-quality static analyzer for Python SQL migrations."
+        in result.stdout
+    )
 
 
 def test_lint_valid_migration(tmp_path: Path) -> None:
@@ -40,7 +43,7 @@ def test_lint_valid_migration(tmp_path: Path) -> None:
     )
     result = runner.invoke(app, ["lint", str(sql_file)])
     assert result.exit_code == 0
-    assert result.stdout == ""
+    assert result.stdout.strip() == ""
 
 
 def test_lint_rule_violation(tmp_path: Path) -> None:
@@ -50,7 +53,7 @@ def test_lint_rule_violation(tmp_path: Path) -> None:
     sql_file.write_text("DROP TABLE users;", encoding="utf-8")
     result = runner.invoke(app, ["lint", str(sql_file)])
     assert result.exit_code == 1
-    assert "[allow_drop_table]" in result.stdout
+    assert "allow_drop_table" in result.stdout
     assert "Table deletion detected" in result.stdout
 
 
@@ -60,14 +63,15 @@ def test_lint_syntax_error(tmp_path: Path) -> None:
     sql_file.write_text("CREATE TABLE (id INT;", encoding="utf-8")
     result = runner.invoke(app, ["lint", str(sql_file)])
     assert result.exit_code == 1
-    assert "[syntax_error]" in result.stdout
+    assert "syntax_error" in result.stdout
 
 
 def test_lint_non_existent_target() -> None:
     """Verifies that linting a non-existent path exits with code 2."""
     result = runner.invoke(app, ["lint", "non_existent_file.sql"])
     assert result.exit_code == 2
-    assert "Error: Target path does not exist" in result.stdout
+    output = result.stdout + result.stderr
+    assert "Error: Target path does not exist" in output
 
 
 def test_lint_directory(tmp_path: Path) -> None:
@@ -88,26 +92,28 @@ def test_lint_directory(tmp_path: Path) -> None:
 
     result = runner.invoke(app, ["lint", str(migrations_dir)])
     assert result.exit_code == 1
-    assert "[allow_drop_table]" in result.stdout
-    assert "[ERROR]" in result.stdout
+    assert "allow_drop_table" in result.stdout
+    assert "ERROR" in result.stdout or "ERROR" in result.stderr
 
 
 def test_explain_valid_rule() -> None:
     """Verifies explaining a valid rule prints documentation."""
     result = runner.invoke(app, ["explain", "allow-drop-table"])
     assert result.exit_code == 0
-    assert "Rule ID: allow_drop_table" in result.stdout
-    assert "Description: Prohibits dropping tables" in result.stdout
-    assert "Severity: error" in result.stdout
-    assert "Why It Matters:" in result.stdout
-    assert "Remediation:" in result.stdout
+    assert "allow_drop_table" in result.stdout
+    assert "Description" in result.stdout
+    assert "Prohibits dropping tables" in result.stdout
+    assert "Severity" in result.stdout
+    assert "Why It Matters" in result.stdout
+    assert "Remediation" in result.stdout
 
 
 def test_explain_invalid_rule() -> None:
     """Verifies explaining an invalid rule prints an error and exits with 2."""
     result = runner.invoke(app, ["explain", "non-existent-rule"])
     assert result.exit_code == 2
-    assert "Error: Unknown rule" in result.stdout
+    output = result.stdout + result.stderr
+    assert "Error: Unknown rule" in output
 
 
 def test_lint_format_json(tmp_path: Path) -> None:
@@ -225,3 +231,27 @@ def test_lint_exclude_paths(tmp_path: Path) -> None:
     assert data["summary"]["files_scanned"] == 1
     assert data["summary"]["violations_count"] == 1
     assert Path(data["violations"][0]["file"]).name == "0001_init.sql"
+
+
+def test_lint_no_targets() -> None:
+    """Verifies that linting with no targets provided prints error and exits with 2."""
+    result = runner.invoke(app, ["lint"])
+    assert result.exit_code == 2
+    output = result.stdout + result.stderr
+    assert "No targets specified" in output
+
+
+def test_lint_invalid_format() -> None:
+    """Verifies that linting with an invalid format prints error and exits with 2."""
+    result = runner.invoke(app, ["lint", "dummy.sql", "--format", "xml"])
+    assert result.exit_code == 2
+    output = result.stdout + result.stderr
+    assert "Invalid format option" in output
+
+
+def test_lint_invalid_severity() -> None:
+    """Verifies linting with an invalid severity level exits with 2."""
+    result = runner.invoke(app, ["lint", "dummy.sql", "--severity", "critical"])
+    assert result.exit_code == 2
+    output = result.stdout + result.stderr
+    assert "Invalid severity level" in output

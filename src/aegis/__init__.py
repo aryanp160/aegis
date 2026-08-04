@@ -1,3 +1,8 @@
 """Aegis: A Python SQL migration static analyzer."""
 
-__version__ = "0.1.0-alpha.1"
+import importlib.metadata
+
+try:
+    __version__ = importlib.metadata.version("aegis")
+except importlib.metadata.PackageNotFoundError:
+    __version__ = "0.4.0-beta.1"

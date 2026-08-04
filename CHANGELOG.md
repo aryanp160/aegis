@@ -5,6 +5,26 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.4.0-beta.1] - 2026-08-04
+
+### Added
+- Dynamic CLI version detection using `importlib.metadata` with hardcoded fallback.
+- Enhanced argument validation on empty target inputs, invalid format schemes, and unknown severity specifications.
+- Error styling redirecting CLI warnings and fatal tracebacks to standard error console using Rich styling.
+- Rich-based panel layouts displaying full descriptions and remediation steps under the `explain` command.
+- Expanded CLI test coverage targeting validation workflows.
+
+### Refactored
+- Escaped markup parsing within terminal diagnostics preventing Rich styling leaks on brackets and directory naming paths.
+
+## [0.3.0-alpha.1] - 2026-07-20
+
+### Added
+- Core static analysis Rule Engine detecting risky migration actions.
+- Initial rules including `allow_drop_table`, `allow_drop_column`, and `allow_rename_table`.
+- Pydantic configuration schemas for rule severities and mapping overrides.
+- Model definitions representing single-rule analysis violations.
+
 ## [0.2.0-alpha.2] - 2026-07-07
 
 ### Added

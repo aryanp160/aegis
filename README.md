@@ -96,6 +96,47 @@ if not result.success:
 
 ---
 
+## 💻 CLI Usage
+
+Aegis provides a command-line interface to lint migrations and display documentation.
+
+### 1. Lint SQL Migrations
+Lint files or directories for rule violations.
+```bash
+# Lint a single SQL migration file
+aegis lint migration.sql
+
+# Lint a directory containing migrations
+aegis lint migrations/
+
+# Run lint and return structured JSON output
+aegis lint migrations/ --format json
+
+# Filter violations by minimum severity
+aegis lint migrations/ --severity error
+
+# Ignore specific rule IDs
+aegis lint migrations/ --ignore allow_drop_table,allow_rename_table
+
+# Exclude specific files/directories from linting
+aegis lint migrations/ --exclude migrations/ignored_dir/
+```
+
+### 2. Explain Rules
+Get detailed documentation, impact statements, and remediation steps for specific rules.
+```bash
+aegis explain allow_drop_table
+```
+
+### 3. Check CLI Version
+```bash
+aegis version
+# or
+aegis --version
+```
+
+---
+
 ## ⚡ Performance Benchmarks
 To run performance latency and throughput benchmarks for the SQL Parser core:
 ```bash
@@ -115,11 +156,12 @@ python benchmarks/benchmark_parser.py
   - Added line and column diagnostic compilation on SQL syntax errors.
   - Optimized file scanner traversing folders without redundant resolution checks.
   - Added optional AST caching to improve parsing latency.
-* **v0.3.0-alpha.1** (Next Milestone):
+* **v0.3.0-alpha.1** (Completed):
   - Setup core static analyzer Rule Engine and severity mapping.
   - Implement rules checking for destructive database schema modifications: AEG-101 (`DROP TABLE`), AEG-102 (`DROP COLUMN`), etc.
-* **v0.4.0-beta.1**:
+* **v0.4.0-beta.1** (Completed):
   - Deliver command-line commands `aegis lint` and `aegis explain` rendering diagnostics using `rich`.
+  - Refined error reporting, validation, dynamic version checks, and test coverage.
 
 ---
 
