@@ -1,0 +1,208 @@
+import logging
+import time
+from typing import Any
+
+from aegis.parser.models import ParsedMigration
+from aegis.rules.base import Rule
+from aegis.rules.context import RuleContext
+from aegis.rules.enums import Severity
+from aegis.rules.models import AnalysisResult, Violation
+from aegis.rules.registry import RuleRegistry
+
+logger = logging.getLogger("aegis.engine")
+
+
+class RuleEngine:
+    """Orchestrates linting analysis by evaluating rules on SQL migrations."""
+
+    _SEVERITY_WEIGHT = {
+        Severity.ERROR: 3,
+        Severity.WARNING: 2,
+        Severity.INFO: 1,
+    }
+
+    def __init__(self) -> None:
+        """Initializes the RuleEngine."""
+        pass
+
+    def _analyze_migration(
+        self,
+        migration: ParsedMigration,
+        rule_instances: list[Rule],
+        config: Any = None,
+    ) -> list[Violation]:
+        """Runs registered rules against a single migration.
+
+        Args:
+            migration: The parsed migration to evaluate.
+            rule_instances: Instantiated rules to execute.
+            config: Optional configurations.
+
+        Returns:
+            A list of Violations found in this migration.
+        """
+        violations: list[Violation] = []
+        logger.debug("Analyzing migration path: %s", migration.path)
+        context = RuleContext(migration=migration, config=config)
+
+        for rule in rule_instances:
+            try:
+                rule_violations = rule.evaluate(context)
+                violations.extend(rule_violations)
+            except Exception as e:
+                logger.error(
+                    "Error executing rule %s on file %s: %s",
+                    rule.metadata.code,
+                    migration.path,
+                    e,
+                )
+
+        return violations
+
+    def analyze(
+        self, migrations: list[ParsedMigration], config: Any = None
+    ) -> AnalysisResult:
+        """Runs all registered lint rules over a collection of migrations.
+
+        Args:
+            migrations: List of parsed migrations containing SQL AST structures.
+            config: Optional configurations to evaluate rules under.
+
+        Returns:
+            An AnalysisResult object collecting all violations and timings.
+        """
+        start_time = time.perf_counter()
+        violations: list[Violation] = []
+
+        if config is not None:
+            RuleRegistry.apply_config(config)
+
+        rules = RuleRegistry.get_rules()
+        logger.info("Executing rule engine analysis with %d active rules.", len(rules))
+
+        # Instantiate all registered rules
+        rule_instances = []
+        for rule_cls in rules:
+            try:
+                rule_instances.append(rule_cls(rule_cls.metadata))
+            except Exception as e:
+                logger.error("Failed to instantiate rule %s: %s", rule_cls.__name__, e)
+
+        # Create a mapping from rule code to rule instances
+        rule_map = {rule.metadata.code: rule for rule in rule_instances}
+        from aegis.parser.enums import SQLDialect
+
+        # Run each migration against each rule instance
+        # Designed to be easily wrapped in a ProcessPoolExecutor in the future
+        for migration in migrations:
+            migration_violations = self._analyze_migration(
+                migration, rule_instances, config
+            )
+
+            raw_lines = None
+            if migration_violations and migration.raw_content:
+                raw_lines = migration.raw_content.splitlines()
+
+            # Post-process violations based on configuration
+            for violation in migration_violations:
+                # 0. Enrich violation with metadata and formatting details
+                rule = rule_map.get(violation.code)
+                if rule is not None:
+                    violation.title = rule.metadata.name
+                    violation.category = rule.metadata.category
+                    violation.risk = rule.metadata.risk
+                    violation.remediation = rule.metadata.remediation
+                    violation.documentation_url = rule.metadata.documentation_url
+
+                    # Extract SQL snippet using AST node
+                    is_pg = migration.dialect == SQLDialect.POSTGRESQL
+                    dialect_name = "postgres" if is_pg else "mysql"
+                    if violation.node is not None:
+                        try:
+                            curr = violation.node
+                            while curr.parent is not None:
+                                curr = curr.parent
+                            violation.sql_snippet = curr.sql(dialect=dialect_name)
+                        except Exception as e:
+                            logger.debug("Failed to compile SQL snippet: %s", e)
+
+                    if (
+                        not violation.sql_snippet
+                        and raw_lines is not None
+                        and violation.line is not None
+                    ):
+                        if 0 < violation.line <= len(raw_lines):
+                            sql_line = raw_lines[violation.line - 1]
+                            violation.sql_snippet = sql_line.strip()
+
+                    # Generate highlighted SQL
+                    if raw_lines is not None and violation.line is not None:
+                        if 0 < violation.line <= len(raw_lines):
+                            offending_line = raw_lines[violation.line - 1]
+                            col = (
+                                violation.column if violation.column is not None else 0
+                            )
+
+                            # Determine highlight length
+                            width = 1
+                            if violation.node is not None:
+                                try:
+                                    node_sql = violation.node.sql(dialect=dialect_name)
+                                    width = len(node_sql)
+                                except Exception:
+                                    pass
+
+                            carets = "^" * max(1, width)
+                            padding = " " * col
+                            violation.highlighted_sql = (
+                                f"{violation.line:4d} | {offending_line}\n"
+                                f"     | {padding}{carets}"
+                            )
+
+                # 1. Apply severity overrides
+                if (
+                    config is not None
+                    and hasattr(config, "rules")
+                    and hasattr(config.rules, "get_overrides")
+                ):
+                    overrides = config.rules.get_overrides()
+                    if violation.code in overrides:
+                        override = overrides[violation.code]
+                        if override.severity is not None:
+                            violation.severity = override.severity
+
+                # 2. Apply per-file suppressions
+                suppressed = False
+                if config is not None and hasattr(config, "suppressions"):
+                    import fnmatch
+
+                    for pattern, ignored_codes in config.suppressions.items():
+                        path_str = violation.path.as_posix()
+                        name_str = violation.path.name
+                        if (
+                            fnmatch.fnmatch(path_str, pattern)
+                            or fnmatch.fnmatch(name_str, pattern)
+                            or fnmatch.fnmatch(str(violation.path), pattern)
+                        ):
+                            if violation.code in ignored_codes:
+                                suppressed = True
+                                break
+
+                if not suppressed:
+                    violations.append(violation)
+
+        # Sort violations deterministically
+        violations.sort(
+            key=lambda v: (
+                -self._SEVERITY_WEIGHT.get(v.severity, 0),
+                v.path.as_posix(),
+                v.line or 0,
+                v.column or 0,
+                v.code,
+            )
+        )
+
+        duration_ms = (time.perf_counter() - start_time) * 1000
+        logger.info("Static analysis finished in %.2f ms.", duration_ms)
+
+        return AnalysisResult(violations=violations, duration_ms=duration_ms)
