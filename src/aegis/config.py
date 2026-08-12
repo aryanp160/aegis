@@ -1,14 +1,10 @@
 import tomllib
 from pathlib import Path
-from typing import Any, Self
+from typing import Self
 
-<<<<<<< HEAD
-from pydantic import BaseModel, Field, ValidationError, field_validator
-=======
 from pydantic import BaseModel, ConfigDict, Field, ValidationError, model_validator
 
 from aegis.rules.enums import Severity
->>>>>>> develop
 
 
 class ConfigError(Exception):
@@ -82,28 +78,6 @@ class AegisConfig(BaseModel):
         default_factory=RuleConfig,
         description="Active rule assertions and policies.",
     )
-<<<<<<< HEAD
-    severities: dict[str, str] = Field(
-        default_factory=lambda: {
-            "allow_drop_table": "error",
-            "allow_drop_column": "error",
-            "allow_rename_table": "warning",
-        },
-        description="Severity overrides for rules.",
-    )
-
-    @field_validator("severities", mode="before")
-    @classmethod
-    def merge_severities_defaults(cls, v: Any) -> Any:
-        defaults = {
-            "allow_drop_table": "error",
-            "allow_drop_column": "error",
-            "allow_rename_table": "warning",
-        }
-        if isinstance(v, dict):
-            return {**defaults, **v}
-        return v
-=======
     ignore_rules: list[str] = Field(
         default_factory=list,
         description="List of rule codes to ignore globally.",
@@ -112,7 +86,6 @@ class AegisConfig(BaseModel):
         default_factory=dict,
         description="Map of file path patterns to rule codes to suppress.",
     )
->>>>>>> develop
 
     @classmethod
     def from_toml(cls, toml_content: str) -> Self:

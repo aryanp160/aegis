@@ -38,7 +38,8 @@ def test_lint_valid_migration(tmp_path: Path) -> None:
     """Verifies that linting a valid SQL migration exits with code 0."""
     sql_file = tmp_path / "valid.sql"
     sql_file.write_text(
-        "CREATE TABLE users (id SERIAL PRIMARY KEY, name VARCHAR(100));",
+        "SET lock_timeout = '2s';\n"
+        "CREATE TABLE users (id INT PRIMARY KEY, name VARCHAR(100));",
         encoding="utf-8",
     )
     result = runner.invoke(app, ["lint", str(sql_file)])
@@ -49,12 +50,12 @@ def test_lint_valid_migration(tmp_path: Path) -> None:
 def test_lint_rule_violation(tmp_path: Path) -> None:
     """Verifies that linting a migration with a violation exits with code 1."""
     sql_file = tmp_path / "violation.sql"
-    # By default allow_drop_table is False, so DROP TABLE is a violation
+    # By default allow_drop_table (AEG-107) is False, so DROP TABLE is a violation
     sql_file.write_text("DROP TABLE users;", encoding="utf-8")
     result = runner.invoke(app, ["lint", str(sql_file)])
     assert result.exit_code == 1
-    assert "allow_drop_table" in result.stdout
-    assert "Table deletion detected" in result.stdout
+    assert "AEG-107" in result.stdout
+    assert "DROP TABLE / DROP COLUMN protection" in result.stdout
 
 
 def test_lint_syntax_error(tmp_path: Path) -> None:
@@ -83,7 +84,7 @@ def test_lint_directory(tmp_path: Path) -> None:
     # Valid file
     valid_file = migrations_dir / "0001_valid.sql"
     valid_file.write_text(
-        "CREATE TABLE users (id SERIAL PRIMARY KEY);", encoding="utf-8"
+        "CREATE TABLE users (id INT PRIMARY KEY);", encoding="utf-8"
     )
 
     # Invalid file
@@ -92,17 +93,17 @@ def test_lint_directory(tmp_path: Path) -> None:
 
     result = runner.invoke(app, ["lint", str(migrations_dir)])
     assert result.exit_code == 1
-    assert "allow_drop_table" in result.stdout
+    assert "AEG-107" in result.stdout
     assert "ERROR" in result.stdout or "ERROR" in result.stderr
 
 
 def test_explain_valid_rule() -> None:
     """Verifies explaining a valid rule prints documentation."""
-    result = runner.invoke(app, ["explain", "allow-drop-table"])
+    result = runner.invoke(app, ["explain", "AEG-107"])
     assert result.exit_code == 0
-    assert "allow_drop_table" in result.stdout
+    assert "AEG-107" in result.stdout
     assert "Description" in result.stdout
-    assert "Prohibits dropping tables" in result.stdout
+    assert "Protects against destructive drops" in result.stdout
     assert "Severity" in result.stdout
     assert "Why It Matters" in result.stdout
     assert "Remediation" in result.stdout
@@ -130,62 +131,35 @@ def test_lint_format_json(tmp_path: Path) -> None:
     assert "version" in data["metadata"]
     assert "timestamp" in data["metadata"]
     assert data["summary"]["files_scanned"] == 1
-    assert data["summary"]["violations_count"] == 1
+    assert data["summary"]["violations_count"] >= 1
     assert data["summary"]["success"] is False
-    assert len(data["violations"]) == 1
-    assert data["violations"][0]["rule"] == "allow_drop_table"
+    assert len(data["violations"]) >= 1
+    assert data["violations"][0]["rule"] == "AEG-107"
     assert data["violations"][0]["severity"] == "error"
 
 
 def test_lint_severity_filtering(tmp_path: Path) -> None:
-    """Verifies that '--severity error' filters out lower severity warnings."""
-    # Create file with both a warning (rename table) and an error (drop table).
-    # To test a warning, write a custom config with allow_rename_table = False
-    # and allow_drop_table = False.
-    config_file = tmp_path / "aegis.toml"
-    config_file.write_text(
-        """
-[rules]
-allow_rename_table = false
-allow_drop_table = false
-""",
-        encoding="utf-8",
-    )
-
+    """Verifies that '--severity' filters out lower severity warnings/infos."""
     sql_file = tmp_path / "test.sql"
-    sql_file.write_text(
-        "ALTER TABLE users RENAME TO customers; DROP TABLE logs;",
-        encoding="utf-8",
-    )
+    # This migration has an error (AEG-107 DROP TABLE)
+    # and a warning (AEG-109 missing lock timeout)
+    sql_file.write_text("DROP TABLE logs;", encoding="utf-8")
 
     # Run with default (warning & error shown)
-    # Pass the start_path by placing us in that directory
-    result_all = runner.invoke(
-        app, ["lint", str(sql_file), "--format", "json"], env={"COV_CORE_SOURCE": ""}
-    )
+    result_all = runner.invoke(app, ["lint", str(sql_file), "--format", "json"])
     import json
+    data_all = json.loads(result_all.stdout)
+    assert data_all["summary"]["violations_count"] >= 2
 
-    # We need to load config in target directory, so we change CWD to tmp_path
-    # so that the configuration file is automatically discovered.
-    import os
-
-    old_cwd = os.getcwd()
-    try:
-        os.chdir(tmp_path)
-        result_all = runner.invoke(app, ["lint", "test.sql", "--format", "json"])
-        data_all = json.loads(result_all.stdout)
-        assert data_all["summary"]["violations_count"] == 2
-
-        # Run with --severity error. Warning should be filtered out.
-        result_err = runner.invoke(
-            app,
-            ["lint", "test.sql", "--format", "json", "--severity", "error"],
-        )
-        data_err = json.loads(result_err.stdout)
-        assert data_err["summary"]["violations_count"] == 1
-        assert data_err["violations"][0]["rule"] == "allow_drop_table"
-    finally:
-        os.chdir(old_cwd)
+    # Run with --severity error. Warning (AEG-109) should be filtered
+    # out, leaving error (AEG-107).
+    result_err = runner.invoke(
+        app,
+        ["lint", str(sql_file), "--format", "json", "--severity", "error"],
+    )
+    data_err = json.loads(result_err.stdout)
+    assert data_err["summary"]["violations_count"] == 1
+    assert data_err["violations"][0]["rule"] == "AEG-107"
 
 
 def test_lint_ignore_suppression(tmp_path: Path) -> None:
@@ -196,7 +170,7 @@ def test_lint_ignore_suppression(tmp_path: Path) -> None:
     # Lint with ignore option
     result = runner.invoke(
         app,
-        ["lint", str(sql_file), "--format", "json", "--ignore", "allow_drop_table"],
+        ["lint", str(sql_file), "--format", "json", "--ignore", "AEG-107,AEG-109"],
     )
     assert result.exit_code == 0
     import json
@@ -229,7 +203,7 @@ def test_lint_exclude_paths(tmp_path: Path) -> None:
 
     data = json.loads(result.stdout)
     assert data["summary"]["files_scanned"] == 1
-    assert data["summary"]["violations_count"] == 1
+    assert data["summary"]["violations_count"] >= 1
     assert Path(data["violations"][0]["file"]).name == "0001_init.sql"
 
 

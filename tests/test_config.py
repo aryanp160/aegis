@@ -130,11 +130,11 @@ def test_load_config_with_severity_overrides(tmp_path: Path) -> None:
     config_file = tmp_path / "aegis.toml"
     config_file.write_text(
         """
-[severities]
-allow_rename_table = "error"
+[rules."AEG-107"]
+severity = "warning"
 """,
         encoding="utf-8",
     )
     config = load_config(config_file)
-    assert config.severities["allow_rename_table"] == "error"
-    assert config.severities["allow_drop_table"] == "error"
+    overrides = config.rules.get_overrides()
+    assert overrides["AEG-107"].severity.value == "warning"

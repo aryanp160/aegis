@@ -1,10 +1,12 @@
 import datetime
 import json
 import logging
+import platform
+import sys
 from pathlib import Path
 from typing import Annotated
 
-import sys
+import sqlglot
 import typer
 from rich.console import Console
 from rich.markup import escape
@@ -12,14 +14,16 @@ from rich.panel import Panel
 
 from aegis import __version__
 from aegis.config import load_config
+from aegis.engine import RuleEngine
 from aegis.logging import setup_logging
 from aegis.parser import SqlParser, discover_migration_files
-from aegis.rules import check_rules
+from aegis.rules.registry import RuleRegistry
 
 app = typer.Typer(
     name="aegis",
     help="Aegis: A production-quality static analyzer for Python SQL migrations.",
     no_args_is_help=True,
+    rich_markup_mode="markdown",
 )
 console = Console()
 logger = logging.getLogger("aegis")
@@ -30,12 +34,22 @@ def get_err_console() -> Console:
     return Console(file=sys.stderr)
 
 
+def _print_version() -> None:
+    """Prints Aegis version and platform/dependency metadata."""
+    python_impl = platform.python_implementation()
+    version_info = (
+        f"[bold blue]Aegis[/bold blue] version: [green]{__version__}[/green]\n"
+        f"  [bold]Python:[/bold]      {platform.python_version()} ({python_impl})\n"
+        f"  [bold]Platform:[/bold]    {platform.platform()}\n"
+        f"  [bold]SQLGlot:[/bold]     {sqlglot.__version__}"
+    )
+    console.print(version_info)
+
+
 def version_callback(value: bool) -> None:
     """Callback to print the package version and exit."""
     if value:
-        console.print(
-            f"[bold blue]Aegis[/bold blue] version: [green]{__version__}[/green]"
-        )
+        _print_version()
         raise typer.Exit()
 
 
@@ -55,7 +69,13 @@ def main(
         help="Enable verbose debug logging.",
     ),
 ) -> None:
-    """Aegis static analyzer for SQL migration safety."""
+    """
+    🛡️ **Aegis** - Production-quality static analyzer for Python SQL migrations.
+
+    Aegis parses your migration files, builds abstract syntax trees (ASTs), and
+    inspects schema changes against safety rules to prevent destructive database
+    schema modifications (e.g., dropping columns, locking tables, unsafe type changes).
+    """
     log_level = "DEBUG" if verbose else "INFO"
     setup_logging(log_level)
     if verbose:
@@ -64,8 +84,8 @@ def main(
 
 @app.command()
 def version() -> None:
-    """Show the version of Aegis."""
-    console.print(f"[bold blue]Aegis[/bold blue] version: [green]{__version__}[/green]")
+    """Show the version of Aegis and execution environment metadata."""
+    _print_version()
 
 
 def _is_excluded(path: Path, excludes: list[Path] | None) -> bool:
@@ -105,7 +125,7 @@ def lint(
         typer.Option(
             "--severity",
             "-s",
-            help="Filter violations by minimum severity (error, warning).",
+            help="Filter violations by minimum severity (error, warning, info).",
         ),
     ] = None,
     ignore: Annotated[
@@ -113,7 +133,7 @@ def lint(
         typer.Option(
             "--ignore",
             "-i",
-            help="List of rule IDs to ignore/suppress (comma-separated).",
+            help="List of rule codes to ignore/suppress (comma-separated).",
         ),
     ] = None,
     exclude: Annotated[
@@ -121,12 +141,23 @@ def lint(
         typer.Option("--exclude", "-e", help="List of paths to exclude from linting."),
     ] = None,
 ) -> None:
-    """Lint SQL migration files for rule violations and print diagnostics.
+    """
+    Lint SQL migration files for rule violations and print diagnostics.
 
-    Examples:
-        aegis lint migration.sql
-        aegis lint migrations/ -f json
-        aegis lint migrations/ -s error -i allow_drop_table
+    Inspects SQL scripts recursively, detecting destructive or non-backwards-compatible
+    database operations.
+
+    ### Examples
+    ```bash
+    # Lint a specific file
+    aegis lint migrations/0001_init.sql
+
+    # Lint a whole directory
+    aegis lint migrations/
+
+    # Exclude test directories and get JSON output
+    aegis lint migrations/ --exclude migrations/test/ --format json
+    ```
     """
     if not targets:
         get_err_console().print(
@@ -144,11 +175,11 @@ def lint(
         raise typer.Exit(code=2)
 
     severity_filter = severity.lower() if severity else None
-    if severity_filter and severity_filter not in ("error", "warning"):
+    if severity_filter and severity_filter not in ("error", "warning", "info"):
         get_err_console().print(
             "[bold red]Error:[/bold red] Invalid severity level: "
             f"[yellow]'{severity}'[/yellow]. "
-            "Supported severity levels: 'error', 'warning'."
+            "Supported severity levels: 'error', 'warning', 'info'."
         )
         raise typer.Exit(code=2)
 
@@ -156,7 +187,7 @@ def lint(
     if ignore:
         for item in ignore:
             for part in item.split(","):
-                ignored_set.add(part.strip().lower().replace("-", "_"))
+                ignored_set.add(part.strip().upper())
 
     files_to_lint: list[Path] = []
     for target in targets:
@@ -193,7 +224,7 @@ def lint(
 
     parser = SqlParser()
     config = load_config()
-    violations_output = []
+    migrations = []
     diagnostics_output = []
 
     for file_path in files_to_lint:
@@ -205,26 +236,8 @@ def lint(
                         {"file": str(file_path), "message": err, "severity": "error"}
                     )
             else:
-                migration = result.migration
-                if migration:
-                    violations = check_rules(migration, config)
-                    for v in violations:
-                        norm_rule = v.rule_name.lower().replace("-", "_")
-                        if norm_rule in ignored_set:
-                            continue
-
-                        v_severity = v.severity.lower()
-                        if severity_filter == "error" and v_severity != "error":
-                            continue
-
-                        violations_output.append(
-                            {
-                                "file": str(v.file_path),
-                                "rule": v.rule_name,
-                                "severity": v.severity,
-                                "message": v.message,
-                            }
-                        )
+                if result.migration:
+                    migrations.append(result.migration)
         except Exception as e:
             get_err_console().print(
                 "[bold red]Internal error[/bold red] processing "
@@ -232,18 +245,48 @@ def lint(
             )
             raise typer.Exit(code=2) from e
 
-    has_failures = bool(violations_output or diagnostics_output)
+    engine = RuleEngine()
+    analysis_result = engine.analyze(migrations, config)
+
+    # Filter violations based on CLI arguments
+    severity_weights = {
+        "error": 3,
+        "warning": 2,
+        "info": 1,
+    }
+    min_weight = severity_weights.get(severity_filter or "", 0)
+
+    filtered_violations = []
+    for v in analysis_result.violations:
+        if v.code in ignored_set:
+            continue
+        v_severity = v.severity.value.lower()
+        if severity_weights.get(v_severity, 0) < min_weight:
+            continue
+        filtered_violations.append(v)
+
+    has_failures = bool(filtered_violations or diagnostics_output)
 
     if format == "json":
         timestamp = datetime.datetime.now(datetime.UTC).isoformat()
+        violations_json = []
+        for v in filtered_violations:
+            violations_json.append({
+                "file": str(v.path),
+                "line": v.line,
+                "column": v.column,
+                "rule": v.code,
+                "severity": v.severity.value,
+                "message": v.message,
+            })
         output_schema = {
             "metadata": {"version": __version__, "timestamp": timestamp},
             "summary": {
                 "files_scanned": len(files_to_lint),
-                "violations_count": len(violations_output),
+                "violations_count": len(filtered_violations),
                 "success": not has_failures,
             },
-            "violations": violations_output,
+            "violations": violations_json,
             "diagnostics": diagnostics_output,
         }
         print(json.dumps(output_schema, indent=2))
@@ -254,13 +297,9 @@ def lint(
                 f"[yellow]{escape(diag['file'])}[/yellow]: "
                 f"\\[syntax_error] {escape(diag['message'])}"
             )
-        for viol in violations_output:
-            sev_color = "red" if viol["severity"].lower() == "error" else "yellow"
-            console.print(
-                f"[bold {sev_color}]{viol['severity'].upper()}[/bold {sev_color}] - "
-                f"[yellow]{escape(viol['file'])}[/yellow]: "
-                f"\\[{escape(viol['rule'])}] {escape(viol['message'])}"
-            )
+        for viol in filtered_violations:
+            console.print(viol.render())
+            console.print()
 
     if has_failures:
         raise typer.Exit(code=1)
@@ -272,43 +311,69 @@ def lint(
 def explain(
     rule_id: Annotated[
         str,
-        typer.Argument(help="The ID of the rule to explain."),
+        typer.Argument(help="The code of the rule to explain (e.g., AEG-101)."),
     ],
 ) -> None:
-    """Show detailed documentation and remediation steps for a rule.
+    """
+    Show detailed documentation, risk assessment, and remediation steps for a rule.
 
-    Examples:
-        aegis explain allow_drop_table
-        aegis explain allow_rename_table
+    ### Examples
+    ```bash
+    aegis explain AEG-101
+    aegis explain AEG-105
+    ```
     """
     config = load_config()
-    normalized_rule_id = rule_id.lower().replace("-", "_")
 
-    from aegis.rules.metadata import RULE_DOCUMENTATION
+    rule_cls = RuleRegistry.get_rule(rule_id.strip().upper())
+    if not rule_cls:
+        # Search case-insensitively
+        norm_search = rule_id.lower().strip()
+        for code, r_cls in RuleRegistry._rules.items():
+            if (
+                code.lower() == norm_search
+                or r_cls.metadata.name.lower() == norm_search
+            ):
+                rule_cls = r_cls
+                break
 
-    if normalized_rule_id not in RULE_DOCUMENTATION:
+    if not rule_cls:
         get_err_console().print(
             "[bold red]Error:[/bold red] Unknown rule "
             f"[yellow]'{escape(rule_id)}'[/yellow]"
         )
         raise typer.Exit(code=2)
 
-    doc = RULE_DOCUMENTATION[normalized_rule_id]
-    severity = config.severities.get(normalized_rule_id, doc["severity"])
+    meta = rule_cls.metadata
+
+    # Check config overrides for severity
+    severity = meta.severity.value
+    if config and hasattr(config, "rules"):
+        overrides = config.rules.get_overrides()
+        if meta.code in overrides and overrides[meta.code].severity is not None:
+            severity = overrides[meta.code].severity.value
+
     sev_color = "red" if severity.lower() == "error" else "yellow"
 
     panel_content = (
-        f"[bold blue]Rule ID:[/bold blue] {normalized_rule_id}\n"
-        f"[bold blue]Severity:[/bold blue] [{sev_color}]{severity}[/{sev_color}]\n\n"
-        f"[bold]Description:[/bold]\n{doc['description']}\n\n"
-        f"[bold]Why It Matters:[/bold]\n{doc['why_it_matters']}\n\n"
-        f"[bold]Remediation:[/bold]\n{doc['remediation']}"
+        f"[bold blue]Code:[/bold blue]        {meta.code}\n"
+        f"[bold blue]Rule Name:[/bold blue]   {meta.name}\n"
+        f"[bold blue]Category:[/bold blue]    {meta.category.value.title()}\n"
+        f"[bold blue]Severity:[/bold blue]    "
+        f"[{sev_color}]{severity.upper()}[/{sev_color}]\n\n"
+        f"[bold]Description:[/bold]\n{meta.description}\n\n"
+        f"[bold]Why It Matters / Risk:[/bold]\n{meta.risk}\n\n"
+        f"[bold]Explanation:[/bold]\n{meta.explanation}\n\n"
+        f"[bold]Remediation:[/bold]\n{meta.remediation}\n\n"
+        f"[bold]Unsafe Example:[/bold]\n[red]{meta.unsafe_sql}[/red]\n\n"
+        f"[bold]Safe Example:[/bold]\n[green]{meta.safe_sql}[/green]\n\n"
+        f"[bold blue]Documentation:[/bold blue] {meta.documentation_url}"
     )
 
     console.print(
         Panel(
             panel_content,
-            title=f"[bold]Rule Documentation: {normalized_rule_id}[/bold]",
+            title=f"[bold]Rule Documentation: {meta.code}[/bold]",
             title_align="left",
             border_style="blue",
             expand=False,

@@ -1,11 +1,3 @@
-<<<<<<< HEAD
-from aegis.rules.engine import check_rules
-from aegis.rules.models import Violation
-
-__all__ = [
-    "Violation",
-    "check_rules",
-=======
 from aegis.rules.base import ASTVisitor, Rule
 from aegis.rules.best_practices import (
     SerialUsageRule,
@@ -48,5 +40,4 @@ __all__ = [
     "MissingLockTimeoutRule",
     "SerialUsageRule",
     "TimestampWithoutTimeZoneRule",
->>>>>>> develop
 ]
