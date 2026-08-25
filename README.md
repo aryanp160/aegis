@@ -99,7 +99,7 @@ Once a migration is parsed, you can evaluate it against Aegis's core static anal
 
 ```python
 from pathlib import Path
-from aegis import RuleEngine, RuleRegistry
+from aegis import RuleEngine
 from aegis.parser import SqlParser
 
 # Parse migration
@@ -109,7 +109,7 @@ result = parser.parse(Path("examples/postgres/0001_init.sql"))
 if result.success and result.migration:
     engine = RuleEngine()
     analysis = engine.analyze([result.migration])
-    
+
     print(f"Discovered {len(analysis.violations)} violations in {analysis.duration_ms:.2f}ms")
     for violation in analysis.violations:
         print(f"[{violation.severity.upper()}] {violation.code} on line {violation.line}: {violation.message}")
@@ -119,7 +119,7 @@ if result.success and result.migration:
 
 ## 💻 CLI Usage
 
-Aegis provides a command-line interface to lint migrations and display documentation.
+Aegis provides a command-line interface to lint migrations, inspect rules, and display documentation.
 
 ### 1. Lint SQL Migrations
 Lint files or directories for rule violations.
@@ -137,19 +137,33 @@ aegis lint migrations/ --format json
 aegis lint migrations/ --severity error
 
 # Ignore specific rule IDs
-aegis lint migrations/ --ignore allow_drop_table,allow_rename_table
+aegis lint migrations/ --ignore AEG-101,AEG-107
 
 # Exclude specific files/directories from linting
 aegis lint migrations/ --exclude migrations/ignored_dir/
 ```
 
-### 2. Explain Rules
-Get detailed documentation, impact statements, and remediation steps for specific rules.
+### 2. List Registered Rules Catalog
+View all active static analysis rules or filter by category or severity.
 ```bash
+# List all registered rules
+aegis rules
+
+# Filter rules by category
+aegis rules --category destructive
+
+# Filter rules by severity level
+aegis rules --severity error
+```
+
+### 3. Explain Rules
+Get detailed documentation, risk assessment, and remediation steps for specific rules.
+```bash
+aegis explain AEG-101
 aegis explain allow_drop_table
 ```
 
-### 3. Check CLI Version
+### 4. Check CLI Version & Environment
 ```bash
 aegis version
 # or
@@ -170,20 +184,10 @@ python scripts/benchmark_engine.py
 ## 🗺️ Roadmap
 
 * **v0.2.0-alpha.2** (Completed):
-<<<<<<< HEAD
   - Added granular exceptions (`EmptySQLFileError`, `UnreadableFileError`).
   - Added line and column diagnostic compilation on SQL syntax errors.
   - Optimized file scanner traversing folders without redundant resolution checks.
   - Added optional AST caching to improve parsing latency.
-* **v0.3.0-alpha.1** (Completed):
-  - Setup core static analyzer Rule Engine and severity mapping.
-  - Implement rules checking for destructive database schema modifications: AEG-101 (`DROP TABLE`), AEG-102 (`DROP COLUMN`), etc.
-* **v0.4.0-beta.1** (Completed):
-  - Deliver command-line commands `aegis lint` and `aegis explain` rendering diagnostics using `rich`.
-  - Refined error reporting, validation, dynamic version checks, and test coverage.
-=======
-  - Granular exceptions (`EmptySQLFileError`, `UnreadableFileError`).
-  - AST caching to improve parsing latency.
 * **v0.3.0-alpha.1** (Completed):
   - Setup core static analyzer Rule Engine and severity mapping.
   - Extensible `ASTVisitor` pattern for custom rule authoring.
@@ -195,10 +199,11 @@ python scripts/benchmark_engine.py
   - Rich visual terminal diagnostics with caret SQL syntax pointing.
   - Enhanced PostgreSQL rule coverage and Golden SQL test suite.
   - Engine execution and AST visitor caching optimizations.
-* **v0.4.0-beta.1** (Next Milestone):
+* **v0.4.0-beta.1** (Completed):
   - Deliver command-line commands `aegis lint` and `aegis explain` rendering diagnostics using `rich` console formatting.
   - Introduce production-ready CLI.
->>>>>>> develop
+* **v0.4.0-beta.2** (Current Release):
+  - CLI UX improvements: enhanced command descriptions, structured `--help` output with examples, argument/option descriptions, Rich version panel, and `aegis rules` discovery command.
 
 ---
 

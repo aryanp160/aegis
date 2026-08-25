@@ -8,20 +8,24 @@ from typing import Annotated
 
 import sqlglot
 import typer
+from rich.box import ROUNDED
 from rich.console import Console
 from rich.markup import escape
 from rich.panel import Panel
+from rich.table import Table
 
+import aegis.rules  # noqa: F401 - triggers rule registration
 from aegis import __version__
 from aegis.config import load_config
 from aegis.engine import RuleEngine
 from aegis.logging import setup_logging
 from aegis.parser import SqlParser, discover_migration_files
+from aegis.rules.enums import Category
 from aegis.rules.registry import RuleRegistry
 
 app = typer.Typer(
     name="aegis",
-    help="Aegis: A production-quality static analyzer for Python SQL migrations.",
+    help="🛡️ Aegis: Production-quality static analyzer for Python SQL migrations.",
     no_args_is_help=True,
     rich_markup_mode="markdown",
 )
@@ -37,13 +41,23 @@ def get_err_console() -> Console:
 def _print_version() -> None:
     """Prints Aegis version and platform/dependency metadata."""
     python_impl = platform.python_implementation()
-    version_info = (
-        f"[bold blue]Aegis[/bold blue] version: [green]{__version__}[/green]\n"
-        f"  [bold]Python:[/bold]      {platform.python_version()} ({python_impl})\n"
-        f"  [bold]Platform:[/bold]    {platform.platform()}\n"
-        f"  [bold]SQLGlot:[/bold]     {sqlglot.__version__}"
+    sqlglot_ver = getattr(sqlglot, "__version__", "unknown")
+    version_content = (
+        f"[bold blue]Aegis Version:[/bold blue]  "
+        f"[bold green]{__version__}[/bold green]\n"
+        f"[bold blue]Python Runtime:[/bold blue] "
+        f"{platform.python_version()} ({python_impl})\n"
+        f"[bold blue]Platform OS:[/bold blue]    {platform.platform()}\n"
+        f"[bold blue]SQLGlot Parser:[/bold blue] {sqlglot_ver}"
     )
-    console.print(version_info)
+    panel = Panel(
+        version_content,
+        title="[bold blue]🛡️  Aegis Migration Analyzer[/bold blue]",
+        title_align="left",
+        border_style="blue",
+        expand=False,
+    )
+    console.print(panel)
 
 
 def version_callback(value: bool) -> None:
@@ -53,7 +67,7 @@ def version_callback(value: bool) -> None:
         raise typer.Exit()
 
 
-@app.callback()
+@app.callback(invoke_without_command=True)
 def main(
     version_opt: bool | None = typer.Option(  # noqa: ARG001
         None,
@@ -61,20 +75,33 @@ def main(
         "-v",
         callback=version_callback,
         is_eager=True,
-        help="Show Aegis version and exit.",
+        help="Show Aegis version and system metadata, then exit.",
     ),
     verbose: bool = typer.Option(
         False,
         "--verbose",
-        help="Enable verbose debug logging.",
+        "-V",
+        help="Enable verbose debug logging output.",
     ),
 ) -> None:
     """
     🛡️ **Aegis** - Production-quality static analyzer for Python SQL migrations.
 
-    Aegis parses your migration files, builds abstract syntax trees (ASTs), and
-    inspects schema changes against safety rules to prevent destructive database
-    schema modifications (e.g., dropping columns, locking tables, unsafe type changes).
+    Aegis inspects your database migration files, builds Abstract Syntax Trees (ASTs),
+    and evaluates schema changes against safety rules to prevent destructive database
+    modifications (e.g., dropping columns, locking tables, unsafe column type changes).
+
+    ### Quick Usage Examples
+    ```bash
+    # Lint a directory containing SQL migrations
+    aegis lint migrations/
+
+    # List all active static analysis rules
+    aegis rules
+
+    # View remediation documentation for a specific rule
+    aegis explain AEG-101
+    ```
     """
     log_level = "DEBUG" if verbose else "INFO"
     setup_logging(log_level)
@@ -82,9 +109,16 @@ def main(
         logger.debug("Verbose logging enabled")
 
 
-@app.command()
+@app.command(name="version", rich_help_panel="Utility Commands")
 def version() -> None:
-    """Show the version of Aegis and execution environment metadata."""
+    """
+    Show Aegis version and execution environment metadata.
+
+    ### Examples
+    ```bash
+    aegis version
+    ```
+    """
     _print_version()
 
 
@@ -107,25 +141,32 @@ def _is_excluded(path: Path, excludes: list[Path] | None) -> bool:
     return False
 
 
-@app.command(name="lint")
+@app.command(name="lint", rich_help_panel="Analysis Commands")
 def lint(
     targets: Annotated[
-        list[Path],
+        list[Path] | None,
         typer.Argument(
-            help="One or more SQL migration files or directories to lint.",
+            help="One or more SQL migration files or directories to analyze.",
             show_default=False,
         ),
     ] = None,
     format: Annotated[
         str,
-        typer.Option("--format", "-f", help="Output format (text, json)."),
+        typer.Option(
+            "--format",
+            "-f",
+            help=(
+                "Output format scheme ('text' for styled terminal output, "
+                "'json' for machine reports)."
+            ),
+        ),
     ] = "text",
     severity: Annotated[
         str | None,
         typer.Option(
             "--severity",
             "-s",
-            help="Filter violations by minimum severity (error, warning, info).",
+            help="Filter violations by minimum severity ('error', 'warning', 'info').",
         ),
     ] = None,
     ignore: Annotated[
@@ -133,30 +174,40 @@ def lint(
         typer.Option(
             "--ignore",
             "-i",
-            help="List of rule codes to ignore/suppress (comma-separated).",
+            help=(
+                "List of rule codes to ignore/suppress "
+                "(comma-separated, e.g., AEG-101,AEG-107)."
+            ),
         ),
     ] = None,
     exclude: Annotated[
         list[Path] | None,
-        typer.Option("--exclude", "-e", help="List of paths to exclude from linting."),
+        typer.Option(
+            "--exclude",
+            "-e",
+            help="Paths to exclude from linting. Can be specified multiple times.",
+        ),
     ] = None,
 ) -> None:
     """
-    Lint SQL migration files for rule violations and print diagnostics.
+    Lint SQL migration files for rule violations and print safety diagnostics.
 
-    Inspects SQL scripts recursively, detecting destructive or non-backwards-compatible
-    database operations.
+    Scans SQL migration scripts recursively, parsing ASTs and detecting destructive
+    or non-backwards-compatible database operations before deployment.
 
     ### Examples
     ```bash
-    # Lint a specific file
+    # Lint a specific migration script
     aegis lint migrations/0001_init.sql
 
-    # Lint a whole directory
+    # Recursively lint a directory of migration files
     aegis lint migrations/
 
-    # Exclude test directories and get JSON output
-    aegis lint migrations/ --exclude migrations/test/ --format json
+    # Generate structured JSON report for CI/CD pipelines
+    aegis lint migrations/ --format json
+
+    # Filter violations by severity and exclude test directories
+    aegis lint migrations/ --severity error --exclude migrations/test/
     ```
     """
     if not targets:
@@ -183,7 +234,7 @@ def lint(
         )
         raise typer.Exit(code=2)
 
-    ignored_set = set()
+    ignored_set: set[str] = set()
     if ignore:
         for item in ignore:
             for part in item.split(","):
@@ -307,32 +358,57 @@ def lint(
     raise typer.Exit(code=0)
 
 
-@app.command(name="explain")
+@app.command(name="explain", rich_help_panel="Analysis Commands")
 def explain(
     rule_id: Annotated[
         str,
-        typer.Argument(help="The code of the rule to explain (e.g., AEG-101)."),
+        typer.Argument(
+            help=(
+                "Rule code (e.g., AEG-101) or rule name "
+                "(e.g., allow_drop_table) to explain."
+            ),
+        ),
     ],
 ) -> None:
     """
-    Show detailed documentation, risk assessment, and remediation steps for a rule.
+    Display detailed documentation, risk assessment, and remediation for a rule.
+
+    Fetches full documentation for a given Aegis rule identifier or rule name,
+    including rule severity, category, risk explanation, remediation steps,
+    and safe/unsafe SQL examples.
 
     ### Examples
     ```bash
+    # Explain a rule by code identifier
     aegis explain AEG-101
-    aegis explain AEG-105
+
+    # Explain a rule by rule name
+    aegis explain allow_drop_table
     ```
     """
     config = load_config()
 
-    rule_cls = RuleRegistry.get_rule(rule_id.strip().upper())
+    norm_search = rule_id.strip().upper()
+    rule_cls = RuleRegistry.get_rule(norm_search)
+
     if not rule_cls:
-        # Search case-insensitively
-        norm_search = rule_id.lower().strip()
+        # Search case-insensitively across rules catalog
+        clean_input = rule_id.lower().strip().replace("-", "_").replace(" ", "_")
+        stripped_input = clean_input.replace("allow_", "").replace("_", "")
+
         for code, r_cls in RuleRegistry._rules.items():
+            meta = r_cls.metadata
+            name_clean = meta.name.lower().replace("-", "_").replace(" ", "_")
+            code_clean = code.lower().replace("-", "_")
+            cls_clean = r_cls.__name__.lower()
+            cls_compact = cls_clean.replace("_", "")
+
             if (
-                code.lower() == norm_search
-                or r_cls.metadata.name.lower() == norm_search
+                clean_input == code_clean
+                or clean_input == name_clean
+                or clean_input in name_clean
+                or clean_input in cls_clean
+                or (stripped_input and stripped_input in cls_compact)
             ):
                 rule_cls = r_cls
                 break
@@ -350,8 +426,10 @@ def explain(
     severity = meta.severity.value
     if config and hasattr(config, "rules"):
         overrides = config.rules.get_overrides()
-        if meta.code in overrides and overrides[meta.code].severity is not None:
-            severity = overrides[meta.code].severity.value
+        if meta.code in overrides:
+            override = overrides[meta.code]
+            if override.severity is not None:
+                severity = override.severity.value
 
     sev_color = "red" if severity.lower() == "error" else "yellow"
 
@@ -379,3 +457,129 @@ def explain(
             expand=False,
         )
     )
+
+
+@app.command(name="rules", rich_help_panel="Analysis Commands")
+def list_rules(
+    category: Annotated[
+        str | None,
+        typer.Option(
+            "--category",
+            "-c",
+            help=(
+                "Filter rules by category ('destructive', 'performance', "
+                "'security', 'compatibility', 'style', 'high_risk', 'operational')."
+            ),
+        ),
+    ] = None,
+    severity: Annotated[
+        str | None,
+        typer.Option(
+            "--severity",
+            "-s",
+            help="Filter rules by default severity ('error', 'warning', 'info').",
+        ),
+    ] = None,
+) -> None:
+    """
+    List registered static analysis rules and summary statistics.
+
+    Displays a formatted catalog of all active static analysis rules in Aegis,
+    allowing filtering by rule category or severity level.
+
+    ### Examples
+    ```bash
+    # List all registered rules
+    aegis rules
+
+    # Filter rules by category
+    aegis rules --category destructive
+
+    # Filter rules by severity level
+    aegis rules --severity error
+    ```
+    """
+    all_rules = list(RuleRegistry._rules.values())
+
+    cat_filter = category.lower().strip() if category else None
+    sev_filter = severity.lower().strip() if severity else None
+
+    enum_categories = {c.value.lower() for c in Category}
+    alias_map = {
+        "high_risk": ["destructive", "high_risk"],
+        "operational": ["performance", "operational"],
+        "best_practices": ["style", "best_practices"],
+    }
+    valid_categories = enum_categories.union(alias_map.keys())
+
+    if cat_filter and cat_filter not in valid_categories:
+        get_err_console().print(
+            "[bold red]Error:[/bold red] Invalid category filter: "
+            f"[yellow]'{escape(category or '')}'[/yellow]. "
+            f"Supported categories: {', '.join(sorted(valid_categories))}."
+        )
+        raise typer.Exit(code=2)
+
+    if sev_filter and sev_filter not in ("error", "warning", "info"):
+        get_err_console().print(
+            "[bold red]Error:[/bold red] Invalid severity filter: "
+            f"[yellow]'{escape(severity or '')}'[/yellow]. "
+            "Supported severity levels: 'error', 'warning', 'info'."
+        )
+        raise typer.Exit(code=2)
+
+    allowed_cats = alias_map.get(cat_filter, [cat_filter]) if cat_filter else []
+
+    table = Table(
+        box=ROUNDED,
+        title="[bold blue]🛡️ Aegis Static Analysis Rules Catalog[/bold blue]",
+        header_style="bold cyan",
+    )
+
+    table.add_column("Code", style="bold blue", justify="left")
+    table.add_column("Rule Name", style="bold white", justify="left")
+    table.add_column("Category", style="magenta", justify="left")
+    table.add_column("Severity", justify="left")
+    table.add_column("Description Summary", justify="left")
+
+    matching_count = 0
+    for rule_cls in sorted(all_rules, key=lambda r: r.metadata.code):
+        meta = rule_cls.metadata
+
+        rule_cat = meta.category.value.lower()
+        rule_sev = meta.severity.value.lower()
+
+        if (
+            allowed_cats
+            and rule_cat not in allowed_cats
+            and cat_filter not in allowed_cats
+        ):
+            continue
+        if sev_filter and rule_sev != sev_filter:
+            continue
+
+        matching_count += 1
+
+        sev_style = "bold red" if rule_sev == "error" else "bold yellow"
+        if rule_sev == "info":
+            sev_style = "bold blue"
+
+        # Short summary of description
+        desc = meta.description.split("\n")[0]
+        if len(desc) > 60:
+            desc = desc[:57] + "..."
+
+        table.add_row(
+            meta.code,
+            meta.name,
+            meta.category.value.title(),
+            f"[{sev_style}]{meta.severity.value.upper()}[/{sev_style}]",
+            desc,
+        )
+
+    console.print(table)
+    summary_text = (
+        f"[dim]Displayed {matching_count} of {len(all_rules)} "
+        "registered static analysis rules.[/dim]"
+    )
+    console.print(summary_text)

@@ -12,7 +12,7 @@ def test_version_command() -> None:
     """Verifies that running 'aegis version' prints the correct version."""
     result = runner.invoke(app, ["version"])
     assert result.exit_code == 0
-    assert "Aegis version" in result.stdout
+    assert "Aegis Version" in result.stdout
     assert __version__ in result.stdout
 
 
@@ -20,7 +20,7 @@ def test_version_option() -> None:
     """Verifies that running 'aegis --version' prints the correct version."""
     result = runner.invoke(app, ["--version"])
     assert result.exit_code == 0
-    assert "Aegis version" in result.stdout
+    assert "Aegis Version" in result.stdout
     assert __version__ in result.stdout
 
 
@@ -28,10 +28,8 @@ def test_help_option() -> None:
     """Verifies that running 'aegis --help' displays CLI help documentation."""
     result = runner.invoke(app, ["--help"])
     assert result.exit_code == 0
-    assert (
-        "Aegis: A production-quality static analyzer for Python SQL migrations."
-        in result.stdout
-    )
+    assert "Aegis" in result.stdout
+    assert "static analyzer for Python SQL migrations" in result.stdout
 
 
 def test_lint_valid_migration(tmp_path: Path) -> None:
@@ -109,12 +107,60 @@ def test_explain_valid_rule() -> None:
     assert "Remediation" in result.stdout
 
 
+def test_explain_rule_by_name() -> None:
+    """Verifies explaining a rule by its name (allow_drop_table)."""
+    result = runner.invoke(app, ["explain", "allow_drop_table"])
+    assert result.exit_code == 0
+    assert "AEG-107" in result.stdout
+
+
 def test_explain_invalid_rule() -> None:
     """Verifies explaining an invalid rule prints an error and exits with 2."""
     result = runner.invoke(app, ["explain", "non-existent-rule"])
     assert result.exit_code == 2
     output = result.stdout + result.stderr
     assert "Error: Unknown rule" in output
+
+
+def test_rules_command() -> None:
+    """Verifies that running 'aegis rules' lists registered rules in catalog table."""
+    result = runner.invoke(app, ["rules"])
+    assert result.exit_code == 0
+    assert "Aegis Static Analysis Rules Catalog" in result.stdout
+    assert "AEG-101" in result.stdout
+    assert "AEG-107" in result.stdout
+    assert "Displayed" in result.stdout
+
+
+def test_rules_category_filter() -> None:
+    """Verifies that 'aegis rules --category destructive' filters by category."""
+    result = runner.invoke(app, ["rules", "--category", "destructive"])
+    assert result.exit_code == 0
+    assert "AEG-101" in result.stdout
+    assert "Destructive" in result.stdout
+
+
+def test_rules_severity_filter() -> None:
+    """Verifies that 'aegis rules --severity error' filters by severity."""
+    result = runner.invoke(app, ["rules", "--severity", "error"])
+    assert result.exit_code == 0
+    assert "ERROR" in result.stdout
+
+
+def test_rules_invalid_category() -> None:
+    """Verifies that 'aegis rules --category invalid' exits with code 2."""
+    result = runner.invoke(app, ["rules", "--category", "invalid_cat"])
+    assert result.exit_code == 2
+    output = result.stdout + result.stderr
+    assert "Invalid category filter" in output
+
+
+def test_rules_invalid_severity() -> None:
+    """Verifies that 'aegis rules --severity invalid' exits with code 2."""
+    result = runner.invoke(app, ["rules", "--severity", "invalid_sev"])
+    assert result.exit_code == 2
+    output = result.stdout + result.stderr
+    assert "Invalid severity filter" in output
 
 
 def test_lint_format_json(tmp_path: Path) -> None:
@@ -148,6 +194,7 @@ def test_lint_severity_filtering(tmp_path: Path) -> None:
     # Run with default (warning & error shown)
     result_all = runner.invoke(app, ["lint", str(sql_file), "--format", "json"])
     import json
+
     data_all = json.loads(result_all.stdout)
     assert data_all["summary"]["violations_count"] >= 2
 

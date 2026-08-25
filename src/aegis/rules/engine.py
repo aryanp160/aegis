@@ -2,6 +2,7 @@ from sqlglot import exp
 
 from aegis.config import AegisConfig
 from aegis.parser.models import ParsedMigration
+from aegis.rules.enums import Severity
 from aegis.rules.models import Violation
 
 
@@ -22,16 +23,16 @@ def check_rules(migration: ParsedMigration, config: AegisConfig) -> list[Violati
         if not config.rules.allow_drop_table:
             # Check if this is a DROP TABLE statement
             if isinstance(node, exp.Drop) and node.args.get("kind") == "TABLE":
-                sev = config.severities.get("allow_drop_table", "error")
                 violations.append(
                     Violation(
-                        file_path=migration.path,
-                        rule_name="allow_drop_table",
-                        severity=sev,
+                        code="AEG-107",
                         message=(
                             "Table deletion detected. Dropping tables is "
                             "forbidden by current policy."
                         ),
+                        path=migration.path,
+                        severity=Severity.ERROR,
+                        node=node,
                     )
                 )
 
@@ -46,33 +47,33 @@ def check_rules(migration: ParsedMigration, config: AegisConfig) -> list[Violati
                         and action.args.get("kind") == "COLUMN"
                     )
                     if is_drop_col:
-                        sev = config.severities.get("allow_drop_column", "error")
                         violations.append(
                             Violation(
-                                file_path=migration.path,
-                                rule_name="allow_drop_column",
-                                severity=sev,
+                                code="AEG-107",
                                 message=(
                                     "Column deletion detected. Dropping columns is "
                                     "forbidden by current policy."
                                 ),
+                                path=migration.path,
+                                severity=Severity.ERROR,
+                                node=action,
                             )
                         )
 
                 # Rule 3: allow_rename_table
                 if not config.rules.allow_rename_table:
                     if isinstance(action, exp.AlterRename):
-                        sev = config.severities.get("allow_rename_table", "warning")
                         violations.append(
                             Violation(
-                                file_path=migration.path,
-                                rule_name="allow_rename_table",
-                                severity=sev,
+                                code="AEG-108",
                                 message=(
                                     "Table renaming detected. Renaming tables is "
                                     "forbidden by current policy."
                                 ),
+                                path=migration.path,
+                                severity=Severity.WARNING,
+                                node=action,
                             )
                         )
 
-    return sorted(violations, key=lambda v: v.rule_name)
+    return sorted(violations, key=lambda v: v.code)

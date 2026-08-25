@@ -5,7 +5,16 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-<<<<<<< HEAD
+## [0.4.0-beta.2] - 2026-08-25
+
+### Added
+- New `aegis rules` CLI command displaying a formatted Rich catalog table of all registered static analysis rules with `--category` and `--severity` filtering.
+- Command organization with Rich help panels (`Analysis Commands` and `Utility Commands`).
+- Formatted Markdown docstrings with copy-pasteable bash examples across `lint`, `explain`, `rules`, and `version` commands.
+- Enhanced parameter descriptions and `Annotated` metadata for CLI options (`--format`, `--severity`, `--ignore`, `--exclude`).
+- Styled version panel output for `aegis version` / `aegis --version` displaying Aegis version, Python runtime, Platform OS, and SQLGlot engine metadata.
+- Comprehensive unit test coverage for new CLI commands, filtering, and help output in `tests/test_cli.py`.
+
 ## [0.4.0-beta.1] - 2026-08-04
 
 ### Added
@@ -18,14 +27,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Refactored
 - Escaped markup parsing within terminal diagnostics preventing Rich styling leaks on brackets and directory naming paths.
 
-## [0.3.0-alpha.1] - 2026-07-20
-
-### Added
-- Core static analysis Rule Engine detecting risky migration actions.
-- Initial rules including `allow_drop_table`, `allow_drop_column`, and `allow_rename_table`.
-- Pydantic configuration schemas for rule severities and mapping overrides.
-- Model definitions representing single-rule analysis violations.
-=======
 ## [0.3.0-alpha.2] - 2026-07-22
 
 ### Added
@@ -52,7 +53,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 - Promoted `RuleEngine` to root public API package (`aegis.engine`).
->>>>>>> develop
 
 ## [0.2.0-alpha.2] - 2026-07-07
 
