@@ -81,9 +81,7 @@ def test_lint_directory(tmp_path: Path) -> None:
 
     # Valid file
     valid_file = migrations_dir / "0001_valid.sql"
-    valid_file.write_text(
-        "CREATE TABLE users (id INT PRIMARY KEY);", encoding="utf-8"
-    )
+    valid_file.write_text("CREATE TABLE users (id INT PRIMARY KEY);", encoding="utf-8")
 
     # Invalid file
     invalid_file = migrations_dir / "0002_invalid.sql"

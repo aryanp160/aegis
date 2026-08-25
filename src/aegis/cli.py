@@ -322,14 +322,16 @@ def lint(
         timestamp = datetime.datetime.now(datetime.UTC).isoformat()
         violations_json = []
         for v in filtered_violations:
-            violations_json.append({
-                "file": str(v.path),
-                "line": v.line,
-                "column": v.column,
-                "rule": v.code,
-                "severity": v.severity.value,
-                "message": v.message,
-            })
+            violations_json.append(
+                {
+                    "file": str(v.path),
+                    "line": v.line,
+                    "column": v.column,
+                    "rule": v.code,
+                    "severity": v.severity.value,
+                    "message": v.message,
+                }
+            )
         output_schema = {
             "metadata": {"version": __version__, "timestamp": timestamp},
             "summary": {
