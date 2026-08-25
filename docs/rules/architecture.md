@@ -25,7 +25,7 @@ class CreateTableVisitor(ASTVisitor):
 
     def visit_create(self, node: Expression) -> None:
         # Custom logic for CREATE statements
-        self.generic_visit(node) # Continue traversing children
+        self.generic_visit(node)  # Continue traversing children
 ```
 
 ## How to write a custom rule
@@ -43,6 +43,7 @@ from aegis.rules.models import RuleMetadata, Violation
 from aegis.rules.enums import Category, Severity
 from sqlglot.expressions import Expression
 
+
 class MissingWhereVisitor(ASTVisitor):
     def __init__(self):
         self.unsafe_nodes = []
@@ -52,6 +53,7 @@ class MissingWhereVisitor(ASTVisitor):
         if not node.args.get("where"):
             self.unsafe_nodes.append(node)
         self.generic_visit(node)
+
 
 class NoUnboundedDeleteRule(Rule):
     metadata = RuleMetadata(
@@ -71,10 +73,10 @@ class NoUnboundedDeleteRule(Rule):
     def evaluate(self, context: RuleContext) -> list[Violation]:
         violations = []
         visitor = MissingWhereVisitor()
-        
+
         for node in context.migration.ast_nodes:
             visitor.visit(node)
-            
+
         for unsafe_node in visitor.unsafe_nodes:
             violations.append(
                 Violation(
@@ -84,7 +86,7 @@ class NoUnboundedDeleteRule(Rule):
                     severity=self.metadata.severity,
                 )
             )
-            
+
         return violations
 ```
 
@@ -97,9 +99,9 @@ To activate a rule, it must be registered explicitly during startup (e.g., in `_
 ```python
 from aegis.rules.registry import RuleRegistry
 
+
 @RuleRegistry.register
-class NoUnboundedDeleteRule(Rule):
-    ...
+class NoUnboundedDeleteRule(Rule): ...
 ```
 
 The registry supports enabling, disabling, and filtering rules by category or severity during analysis.

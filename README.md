@@ -110,9 +110,13 @@ if result.success and result.migration:
     engine = RuleEngine()
     analysis = engine.analyze([result.migration])
 
-    print(f"Discovered {len(analysis.violations)} violations in {analysis.duration_ms:.2f}ms")
+    print(
+        f"Discovered {len(analysis.violations)} violations in {analysis.duration_ms:.2f}ms"
+    )
     for violation in analysis.violations:
-        print(f"[{violation.severity.upper()}] {violation.code} on line {violation.line}: {violation.message}")
+        print(
+            f"[{violation.severity.upper()}] {violation.code} on line {violation.line}: {violation.message}"
+        )
 ```
 
 ---
