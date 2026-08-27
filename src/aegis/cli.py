@@ -21,6 +21,7 @@ from aegis.engine import RuleEngine
 from aegis.logging import setup_logging
 from aegis.parser import SqlParser, discover_migration_files
 from aegis.rules.enums import Category
+from aegis.rules.models import Violation
 from aegis.rules.registry import RuleRegistry
 
 app = typer.Typer(
@@ -55,6 +56,7 @@ def _print_version() -> None:
         title="[bold blue]🛡️  Aegis Migration Analyzer[/bold blue]",
         title_align="left",
         border_style="blue",
+        box=ROUNDED,
         expand=False,
     )
     console.print(panel)
@@ -139,6 +141,41 @@ def _is_excluded(path: Path, excludes: list[Path] | None) -> bool:
         if resolved_excl.is_dir() and resolved_excl in resolved_path.parents:
             return True
     return False
+
+
+def _format_styled_violation(viol: Violation) -> str:
+    """Renders a visually stunning, color-coded diagnostic block for terminal output."""
+    sev_str = viol.severity.value.upper()
+    if sev_str == "ERROR":
+        badge = "[bold red]✖ ERROR[/bold red]"
+    elif sev_str == "WARNING":
+        badge = "[bold yellow]▲ WARNING[/bold yellow]"
+    else:
+        badge = "[bold blue]ℹ INFO[/bold blue]"
+
+    file_loc = f"{viol.path}:{viol.line or ''}:{viol.column or ''}"
+    cat_str = viol.category.value.title() if viol.category else "General"
+    fix_str = viol.remediation or "Review migration script."
+    doc_url = viol.documentation_url or "https://aegis.dev"
+
+    block = (
+        f"{badge} [bold white]{viol.code}[/bold white]: "
+        f"[bold]{escape(viol.title or viol.message)}[/bold]\n"
+        f"  [bold dim]File:[/bold dim]         [cyan]{escape(file_loc)}[/cyan]\n"
+        f"  [bold dim]Category:[/bold dim]     [magenta]{escape(cat_str)}[/magenta]\n"
+        f"  [bold dim]Risk:[/bold dim]         {escape(viol.risk or viol.message)}\n"
+        f"  [bold dim]Fix:[/bold dim]          {escape(fix_str)}\n"
+        f"  [bold dim]Docs:[/bold dim]         "
+        f"[blue underline]{escape(doc_url)}[/blue underline]"
+    )
+
+    if viol.highlighted_sql:
+        block += f"\n\n  [bold]Highlighted SQL:[/bold]\n{viol.highlighted_sql}"
+    elif viol.sql_snippet:
+        snippet_esc = escape(viol.sql_snippet)
+        block += f"\n\n  [bold]SQL Snippet:[/bold]\n    [cyan]{snippet_esc}[/cyan]"
+
+    return block
 
 
 @app.command(name="lint", rich_help_panel="Analysis Commands")
@@ -328,8 +365,15 @@ def lint(
                     "line": v.line,
                     "column": v.column,
                     "rule": v.code,
+                    "title": v.title or "",
+                    "category": v.category.value if v.category else "",
                     "severity": v.severity.value,
                     "message": v.message,
+                    "risk": v.risk or "",
+                    "remediation": v.remediation or "",
+                    "documentation_url": v.documentation_url or "",
+                    "sql_snippet": v.sql_snippet or "",
+                    "highlighted_sql": v.highlighted_sql or "",
                 }
             )
         output_schema = {
@@ -337,6 +381,20 @@ def lint(
             "summary": {
                 "files_scanned": len(files_to_lint),
                 "violations_count": len(filtered_violations),
+                "errors_count": sum(
+                    1
+                    for v in filtered_violations
+                    if v.severity.value.lower() == "error"
+                ),
+                "warnings_count": sum(
+                    1
+                    for v in filtered_violations
+                    if v.severity.value.lower() == "warning"
+                ),
+                "info_count": sum(
+                    1 for v in filtered_violations if v.severity.value.lower() == "info"
+                ),
+                "duration_ms": round(analysis_result.duration_ms, 2),
                 "success": not has_failures,
             },
             "violations": violations_json,
@@ -351,8 +409,50 @@ def lint(
                 f"\\[syntax_error] {escape(diag['message'])}"
             )
         for viol in filtered_violations:
-            console.print(viol.render())
+            console.print(_format_styled_violation(viol))
             console.print()
+
+        # Summary panel
+        scanned_count = len(files_to_lint)
+        dur_str = f"{analysis_result.duration_ms:.1f}ms"
+        err_c = sum(
+            1 for v in filtered_violations if v.severity.value.lower() == "error"
+        )
+        warn_c = sum(
+            1 for v in filtered_violations if v.severity.value.lower() == "warning"
+        )
+        info_c = sum(
+            1 for v in filtered_violations if v.severity.value.lower() == "info"
+        )
+
+        if not has_failures:
+            summary_text = (
+                f"[bold green]✔ Passed:[/bold green] Scanned "
+                f"[bold]{scanned_count}[/bold] file(s). "
+                f"0 violations found in [dim]{dur_str}[/dim]."
+            )
+            summary_panel = Panel(
+                summary_text,
+                border_style="green",
+                box=ROUNDED,
+                expand=False,
+            )
+        else:
+            summary_text = (
+                f"[bold red]✖ Failed:[/bold red] Scanned "
+                f"[bold]{scanned_count}[/bold] file(s). "
+                f"Found [bold]{len(filtered_violations)}[/bold] violation(s) ("
+                f"[bold red]{err_c} error(s)[/bold red], "
+                f"[bold yellow]{warn_c} warning(s)[/bold yellow], "
+                f"[bold blue]{info_c} info(s)[/bold blue]) in [dim]{dur_str}[/dim]."
+            )
+            summary_panel = Panel(
+                summary_text,
+                border_style="red",
+                box=ROUNDED,
+                expand=False,
+            )
+        console.print(summary_panel)
 
     if has_failures:
         raise typer.Exit(code=1)
@@ -434,28 +534,32 @@ def explain(
                 severity = override.severity.value
 
     sev_color = "red" if severity.lower() == "error" else "yellow"
+    cat_title = meta.category.value.title()
+    doc_url = meta.documentation_url
 
     panel_content = (
-        f"[bold blue]Code:[/bold blue]        {meta.code}\n"
+        f"[bold blue]Code:[/bold blue]        [bold white]{meta.code}[/bold white]\n"
         f"[bold blue]Rule Name:[/bold blue]   {meta.name}\n"
-        f"[bold blue]Category:[/bold blue]    {meta.category.value.title()}\n"
+        f"[bold blue]Category:[/bold blue]    [magenta]{cat_title}[/magenta]\n"
         f"[bold blue]Severity:[/bold blue]    "
         f"[{sev_color}]{severity.upper()}[/{sev_color}]\n\n"
         f"[bold]Description:[/bold]\n{meta.description}\n\n"
         f"[bold]Why It Matters / Risk:[/bold]\n{meta.risk}\n\n"
         f"[bold]Explanation:[/bold]\n{meta.explanation}\n\n"
-        f"[bold]Remediation:[/bold]\n{meta.remediation}\n\n"
-        f"[bold]Unsafe Example:[/bold]\n[red]{meta.unsafe_sql}[/red]\n\n"
-        f"[bold]Safe Example:[/bold]\n[green]{meta.safe_sql}[/green]\n\n"
-        f"[bold blue]Documentation:[/bold blue] {meta.documentation_url}"
+        f"[bold yellow]💡 Remediation Strategy:[/bold yellow]\n{meta.remediation}\n\n"
+        f"[bold red]Unsafe Example:[/bold red]\n[red]{meta.unsafe_sql}[/red]\n\n"
+        f"[bold green]Safe Example:[/bold green]\n[green]{meta.safe_sql}[/green]\n\n"
+        f"[bold blue]Documentation:[/bold blue] "
+        f"[blue underline]{doc_url}[/blue underline]"
     )
 
     console.print(
         Panel(
             panel_content,
-            title=f"[bold]Rule Documentation: {meta.code}[/bold]",
+            title=f"[bold blue]🛡️ Rule Documentation: {meta.code}[/bold blue]",
             title_align="left",
             border_style="blue",
+            box=ROUNDED,
             expand=False,
         )
     )
@@ -562,9 +666,12 @@ def list_rules(
 
         matching_count += 1
 
-        sev_style = "bold red" if rule_sev == "error" else "bold yellow"
-        if rule_sev == "info":
-            sev_style = "bold blue"
+        if rule_sev == "error":
+            sev_badge = "[bold red]● ERROR[/bold red]"
+        elif rule_sev == "warning":
+            sev_badge = "[bold yellow]▲ WARNING[/bold yellow]"
+        else:
+            sev_badge = "[bold blue]ℹ INFO[/bold blue]"
 
         # Short summary of description
         desc = meta.description.split("\n")[0]
@@ -575,7 +682,7 @@ def list_rules(
             meta.code,
             meta.name,
             meta.category.value.title(),
-            f"[{sev_style}]{meta.severity.value.upper()}[/{sev_style}]",
+            sev_badge,
             desc,
         )
 

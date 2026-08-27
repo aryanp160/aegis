@@ -79,7 +79,7 @@ class Violation(BaseModel):
     node: Any = Field(default=None, exclude=True)
 
     def render(self) -> str:
-        """Renders a detailed, beautiful diagnostic block for this violation."""
+        """Renders a detailed diagnostic block for this violation."""
         lines = [
             f"[{self.severity.value.upper()}] {self.code}: {self.title or ''}",
             f"Category:  {self.category.value.title() if self.category else ''}",

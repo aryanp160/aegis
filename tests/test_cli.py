@@ -42,7 +42,8 @@ def test_lint_valid_migration(tmp_path: Path) -> None:
     )
     result = runner.invoke(app, ["lint", str(sql_file)])
     assert result.exit_code == 0
-    assert result.stdout.strip() == ""
+    assert "Passed" in result.stdout
+    assert "0 violations" in result.stdout
 
 
 def test_lint_rule_violation(tmp_path: Path) -> None:
@@ -176,10 +177,13 @@ def test_lint_format_json(tmp_path: Path) -> None:
     assert "timestamp" in data["metadata"]
     assert data["summary"]["files_scanned"] == 1
     assert data["summary"]["violations_count"] >= 1
+    assert data["summary"]["errors_count"] >= 1
     assert data["summary"]["success"] is False
     assert len(data["violations"]) >= 1
     assert data["violations"][0]["rule"] == "AEG-107"
     assert data["violations"][0]["severity"] == "error"
+    assert "title" in data["violations"][0]
+    assert "remediation" in data["violations"][0]
 
 
 def test_lint_severity_filtering(tmp_path: Path) -> None:
