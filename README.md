@@ -174,6 +174,50 @@ aegis version
 aegis --version
 ```
 
+### 5. Shell Completion
+Generate and configure shell completion scripts for your active shell environment.
+
+#### Generate Completion Scripts
+Generate raw completion scripts for Bash, Zsh, or Fish:
+```bash
+# Bash
+aegis completion bash > aegis.bash
+
+# Zsh
+aegis completion zsh > aegis.zsh
+
+# Fish
+aegis completion fish > aegis.fish
+```
+
+#### Install Shell Completion
+##### Zsh (Recommended)
+1. Generate the completion script and save it to a folder in your `$fpath`:
+   ```bash
+   aegis completion zsh > ~/.zsh/completion/_aegis
+   ```
+2. Make sure the folder is added to your `~/.zshrc` before calling `compinit`:
+   ```zsh
+   fpath=(~/.zsh/completion $fpath)
+   autoload -Uz compinit && compinit
+   ```
+3. Restart your shell or run `source ~/.zshrc` to activate the completion menu.
+
+##### Bash
+1. Output the completion script to a directory and source it in your `~/.bashrc`:
+   ```bash
+   aegis completion bash > ~/.aegis-completion.bash
+   echo "source ~/.aegis-completion.bash" >> ~/.bashrc
+   ```
+2. Reload your shell configuration.
+
+##### Fish
+1. Save the completion script directly to the Fish completions directory:
+   ```bash
+   aegis completion fish > ~/.config/fish/completions/aegis.fish
+   ```
+2. Fish will dynamically load it in your next session.
+
 ---
 
 ## ⚡ Performance Benchmarks

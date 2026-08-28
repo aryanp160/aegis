@@ -1,28 +1,16 @@
-import datetime
-import json
 import logging
-import platform
 import sys
 from pathlib import Path
-from typing import Annotated
+from typing import TYPE_CHECKING, Annotated
 
-import sqlglot
+if TYPE_CHECKING:
+    from aegis.rules.models import Violation
+
 import typer
-from rich.box import ROUNDED
 from rich.console import Console
-from rich.markup import escape
-from rich.panel import Panel
-from rich.table import Table
 
-import aegis.rules  # noqa: F401 - triggers rule registration
 from aegis import __version__
-from aegis.config import load_config
-from aegis.engine import RuleEngine
 from aegis.logging import setup_logging
-from aegis.parser import SqlParser, discover_migration_files
-from aegis.rules.enums import Category
-from aegis.rules.models import Violation
-from aegis.rules.registry import RuleRegistry
 
 app = typer.Typer(
     name="aegis",
@@ -41,6 +29,12 @@ def get_err_console() -> Console:
 
 def _print_version() -> None:
     """Prints Aegis version and platform/dependency metadata."""
+    import platform
+
+    import sqlglot
+    from rich.box import ROUNDED
+    from rich.panel import Panel
+
     python_impl = platform.python_implementation()
     sqlglot_ver = getattr(sqlglot, "__version__", "unknown")
     version_content = (
@@ -143,8 +137,10 @@ def _is_excluded(path: Path, excludes: list[Path] | None) -> bool:
     return False
 
 
-def _format_styled_violation(viol: Violation) -> str:
+def _format_styled_violation(viol: "Violation") -> str:
     """Renders a visually stunning, color-coded diagnostic block for terminal output."""
+    from rich.markup import escape
+
     sev_str = viol.severity.value.upper()
     if sev_str == "ERROR":
         badge = "[bold red]✖ ERROR[/bold red]"
@@ -247,6 +243,18 @@ def lint(
     aegis lint migrations/ --severity error --exclude migrations/test/
     ```
     """
+    import datetime
+    import json
+
+    from rich.box import ROUNDED
+    from rich.markup import escape
+    from rich.panel import Panel
+
+    import aegis.rules  # noqa: F401 - triggers rule registration
+    from aegis.config import load_config
+    from aegis.engine import RuleEngine
+    from aegis.parser import SqlParser, discover_migration_files
+
     if not targets:
         get_err_console().print(
             "[bold red]Error:[/bold red] No targets specified. "
@@ -488,6 +496,14 @@ def explain(
     aegis explain allow_drop_table
     ```
     """
+    from rich.box import ROUNDED
+    from rich.markup import escape
+    from rich.panel import Panel
+
+    import aegis.rules  # noqa: F401 - triggers rule registration
+    from aegis.config import load_config
+    from aegis.rules.registry import RuleRegistry
+
     config = load_config()
 
     norm_search = rule_id.strip().upper()
@@ -605,6 +621,14 @@ def list_rules(
     aegis rules --severity error
     ```
     """
+    from rich.box import ROUNDED
+    from rich.markup import escape
+    from rich.table import Table
+
+    import aegis.rules  # noqa: F401 - triggers rule registration
+    from aegis.rules.enums import Category
+    from aegis.rules.registry import RuleRegistry
+
     all_rules = list(RuleRegistry._rules.values())
 
     cat_filter = category.lower().strip() if category else None
@@ -692,3 +716,53 @@ def list_rules(
         "registered static analysis rules.[/dim]"
     )
     console.print(summary_text)
+
+
+@app.command(name="completion", rich_help_panel="Utility Commands")
+def completion(
+    shell: Annotated[
+        str,
+        typer.Argument(
+            help="The shell to generate completion script for (bash, zsh, fish)."
+        ),
+    ],
+) -> None:
+    """
+    Generate shell completion scripts for Bash, Zsh, or Fish.
+
+    This command outputs the completion script to stdout, which you can redirect
+    to a file or source directly in your shell configuration.
+
+    ### Examples
+    ```bash
+    # Generate Bash completion script
+    aegis completion bash > aegis.bash
+
+    # Generate Zsh completion script
+    aegis completion zsh > aegis.zsh
+    ```
+    """
+    import typer.main
+    from typer._completion_classes import BashComplete, FishComplete, ZshComplete
+
+    click_command = typer.main.get_command(app)
+
+    shell_lower = shell.lower().strip()
+    prog_name = "aegis"
+    complete_var = f"_{prog_name.upper().replace('-', '_')}_COMPLETE"
+
+    if shell_lower == "bash":
+        comp = BashComplete(click_command, {}, prog_name, complete_var)
+    elif shell_lower == "zsh":
+        comp = ZshComplete(click_command, {}, prog_name, complete_var)
+    elif shell_lower == "fish":
+        comp = FishComplete(click_command, {}, prog_name, complete_var)
+    else:
+        get_err_console().print(
+            f"[bold red]Error:[/bold red] Unsupported shell "
+            f"[yellow]'{shell}'[/yellow]. "
+            "Supported shells: 'bash', 'zsh', 'fish'."
+        )
+        raise typer.Exit(code=2)
+
+    print(comp.source())

@@ -278,3 +278,16 @@ def test_lint_invalid_severity() -> None:
     assert result.exit_code == 2
     output = result.stdout + result.stderr
     assert "Invalid severity level" in output
+
+
+def test_completion_command() -> None:
+    """Verifies that completion command prints shell completion scripts."""
+    for shell in ["bash", "zsh", "fish"]:
+        result = runner.invoke(app, ["completion", shell])
+        assert result.exit_code == 0
+        assert "aegis" in result.stdout
+
+    # Test invalid shell
+    result = runner.invoke(app, ["completion", "invalid_shell"])
+    assert result.exit_code == 2
+    assert "Unsupported shell" in result.stdout + result.stderr
