@@ -99,7 +99,7 @@ Once a migration is parsed, you can evaluate it against Aegis's core static anal
 
 ```python
 from pathlib import Path
-from aegis import RuleEngine, RuleRegistry
+from aegis import RuleEngine
 from aegis.parser import SqlParser
 
 # Parse migration
@@ -109,11 +109,114 @@ result = parser.parse(Path("examples/postgres/0001_init.sql"))
 if result.success and result.migration:
     engine = RuleEngine()
     analysis = engine.analyze([result.migration])
-    
-    print(f"Discovered {len(analysis.violations)} violations in {analysis.duration_ms:.2f}ms")
+
+    print(
+        f"Discovered {len(analysis.violations)} violations in {analysis.duration_ms:.2f}ms"
+    )
     for violation in analysis.violations:
-        print(f"[{violation.severity.upper()}] {violation.code} on line {violation.line}: {violation.message}")
+        print(
+            f"[{violation.severity.upper()}] {violation.code} on line {violation.line}: {violation.message}"
+        )
 ```
+
+---
+
+## 💻 CLI Usage
+
+Aegis provides a command-line interface to lint migrations, inspect rules, and display documentation.
+
+### 1. Lint SQL Migrations
+Lint files or directories for rule violations.
+```bash
+# Lint a single SQL migration file
+aegis lint migration.sql
+
+# Lint a directory containing migrations
+aegis lint migrations/
+
+# Run lint and return structured JSON output
+aegis lint migrations/ --format json
+
+# Filter violations by minimum severity
+aegis lint migrations/ --severity error
+
+# Ignore specific rule IDs
+aegis lint migrations/ --ignore AEG-101,AEG-107
+
+# Exclude specific files/directories from linting
+aegis lint migrations/ --exclude migrations/ignored_dir/
+```
+
+### 2. List Registered Rules Catalog
+View all active static analysis rules or filter by category or severity.
+```bash
+# List all registered rules
+aegis rules
+
+# Filter rules by category
+aegis rules --category destructive
+
+# Filter rules by severity level
+aegis rules --severity error
+```
+
+### 3. Explain Rules
+Get detailed documentation, risk assessment, and remediation steps for specific rules.
+```bash
+aegis explain AEG-101
+aegis explain allow_drop_table
+```
+
+### 4. Check CLI Version & Environment
+```bash
+aegis version
+# or
+aegis --version
+```
+
+### 5. Shell Completion
+Generate and configure shell completion scripts for your active shell environment.
+
+#### Generate Completion Scripts
+Generate raw completion scripts for Bash, Zsh, or Fish:
+```bash
+# Bash
+aegis completion bash > aegis.bash
+
+# Zsh
+aegis completion zsh > aegis.zsh
+
+# Fish
+aegis completion fish > aegis.fish
+```
+
+#### Install Shell Completion
+##### Zsh (Recommended)
+1. Generate the completion script and save it to a folder in your `$fpath`:
+   ```bash
+   aegis completion zsh > ~/.zsh/completion/_aegis
+   ```
+2. Make sure the folder is added to your `~/.zshrc` before calling `compinit`:
+   ```zsh
+   fpath=(~/.zsh/completion $fpath)
+   autoload -Uz compinit && compinit
+   ```
+3. Restart your shell or run `source ~/.zshrc` to activate the completion menu.
+
+##### Bash
+1. Output the completion script to a directory and source it in your `~/.bashrc`:
+   ```bash
+   aegis completion bash > ~/.aegis-completion.bash
+   echo "source ~/.aegis-completion.bash" >> ~/.bashrc
+   ```
+2. Reload your shell configuration.
+
+##### Fish
+1. Save the completion script directly to the Fish completions directory:
+   ```bash
+   aegis completion fish > ~/.config/fish/completions/aegis.fish
+   ```
+2. Fish will dynamically load it in your next session.
 
 ---
 
@@ -129,8 +232,10 @@ python scripts/benchmark_engine.py
 ## 🗺️ Roadmap
 
 * **v0.2.0-alpha.2** (Completed):
-  - Granular exceptions (`EmptySQLFileError`, `UnreadableFileError`).
-  - AST caching to improve parsing latency.
+  - Added granular exceptions (`EmptySQLFileError`, `UnreadableFileError`).
+  - Added line and column diagnostic compilation on SQL syntax errors.
+  - Optimized file scanner traversing folders without redundant resolution checks.
+  - Added optional AST caching to improve parsing latency.
 * **v0.3.0-alpha.1** (Completed):
   - Setup core static analyzer Rule Engine and severity mapping.
   - Extensible `ASTVisitor` pattern for custom rule authoring.
@@ -142,9 +247,11 @@ python scripts/benchmark_engine.py
   - Rich visual terminal diagnostics with caret SQL syntax pointing.
   - Enhanced PostgreSQL rule coverage and Golden SQL test suite.
   - Engine execution and AST visitor caching optimizations.
-* **v0.4.0-beta.1** (Next Milestone):
+* **v0.4.0-beta.1** (Completed):
   - Deliver command-line commands `aegis lint` and `aegis explain` rendering diagnostics using `rich` console formatting.
   - Introduce production-ready CLI.
+* **v0.4.0-beta.2** (Current Release):
+  - CLI UX improvements: enhanced command descriptions, structured `--help` output with examples, argument/option descriptions, Rich version panel, and `aegis rules` discovery command.
 
 ---
 

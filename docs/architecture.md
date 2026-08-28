@@ -127,10 +127,10 @@ High-level analyzer rules will depend on the `BaseParser` abstraction, rather th
 
 ---
 
-## Future Rule Engine Integration
+## Rule Engine & CLI Integration
 
-In `v0.3.0-alpha.1`, the **Rule Engine** will consume the parsed `ParsedMigration` objects:
+As of `v0.3.0-alpha.1` and `v0.4.0-beta.1`, the **Rule Engine** and **CLI** are fully integrated:
 
-1. **AST Node Traverser**: Subclasses of a base rule runner will traverse the `ast_nodes` list (filtering for `exp.Alter`, `exp.Drop`, `exp.ColumnDef`, etc.).
-2. **Context Evaluator**: The AST nodes will be checked against the active settings defined in `AegisConfig.rules` (e.g. `allow_drop_column`).
-3. **Violations Compiler**: Any destructive or unsafe operations will generate a `Violation` model mapping the file path, triggered warning rule, severity, and resolving guidance.
+1. **AST Node Traverser**: Inspects the SQL AST compile tree nodes (e.g. `exp.Alter`, `exp.Drop`) against rules.
+2. **Context Evaluator**: Validates operations against `AegisConfig` rules (e.g. `allow_drop_table`, `allow_drop_column`, `allow_rename_table`).
+3. **CLI Executor**: `aegis lint` invokes the engine and formats diagnostics with Rich. `aegis explain` shows rule documentations in standard details.

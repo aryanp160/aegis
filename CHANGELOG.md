@@ -5,6 +5,34 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.4.0-beta.2] - 2026-08-25
+
+### Added
+- New `aegis rules` CLI command displaying a formatted Rich catalog table of all registered static analysis rules with `--category` and `--severity` filtering.
+- Command organization with Rich help panels (`Analysis Commands` and `Utility Commands`).
+- Formatted Markdown docstrings with copy-pasteable bash examples across `lint`, `explain`, `rules`, and `version` commands.
+- Enhanced parameter descriptions and `Annotated` metadata for CLI options (`--format`, `--severity`, `--ignore`, `--exclude`).
+- Styled version panel output for `aegis version` / `aegis --version` displaying Aegis version, Python runtime, Platform OS, and SQLGlot engine metadata.
+- Comprehensive unit test coverage for new CLI commands, filtering, and help output in `tests/test_cli.py`.
+- New `aegis completion [bash|zsh|fish]` CLI command to output shell autocompletion configuration scripts dynamically.
+- Shell completion installation and configuration guides added to README.md.
+
+### Optimized
+- Refactored `__init__.py` and `cli.py` to lazily import heavy modules (such as `sqlglot`, rules registry registration, and engines) at runtime. This resulted in a **42% reduction** in CLI startup latency (from ~562 ms to ~327 ms).
+- Swapped default console logging from `RichHandler` to a lightweight `StreamHandler` for standard runs, utilizing `RichHandler` only during debug/verbose runs to avoid markup parsing overhead.
+
+## [0.4.0-beta.1] - 2026-08-04
+
+### Added
+- Dynamic CLI version detection using `importlib.metadata` with hardcoded fallback.
+- Enhanced argument validation on empty target inputs, invalid format schemes, and unknown severity specifications.
+- Error styling redirecting CLI warnings and fatal tracebacks to standard error console using Rich styling.
+- Rich-based panel layouts displaying full descriptions and remediation steps under the `explain` command.
+- Expanded CLI test coverage targeting validation workflows.
+
+### Refactored
+- Escaped markup parsing within terminal diagnostics preventing Rich styling leaks on brackets and directory naming paths.
+
 ## [0.3.0-alpha.2] - 2026-07-22
 
 ### Added
