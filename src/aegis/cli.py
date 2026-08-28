@@ -1,7 +1,7 @@
 import logging
 import sys
 from pathlib import Path
-from typing import TYPE_CHECKING, Annotated
+from typing import TYPE_CHECKING, Annotated, Any
 
 if TYPE_CHECKING:
     from aegis.rules.models import Violation
@@ -751,6 +751,7 @@ def completion(
     prog_name = "aegis"
     complete_var = f"_{prog_name.upper().replace('-', '_')}_COMPLETE"
 
+    comp: Any
     if shell_lower == "bash":
         comp = BashComplete(click_command, {}, prog_name, complete_var)
     elif shell_lower == "zsh":

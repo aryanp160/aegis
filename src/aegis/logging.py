@@ -12,6 +12,7 @@ def setup_logging(level: str = "INFO") -> None:
     for h in list(root.handlers):
         root.removeHandler(h)
 
+    handler: logging.Handler
     if level == "DEBUG":
         from rich.logging import RichHandler
 
